@@ -1,0 +1,29 @@
+{
+  "name": "appfolio-grokbot-webhook-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Thin HTTPS verify-and-forward for AppFolio webhooks → Grok Bot",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "vercel dev"
+  },
+  "dependencies": {
+    "jose": "^6.0.11"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "@vercel/node": "^5.1.14",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.2"
+  },
+  "allowScripts": {
+    "esbuild@0.27.0": true
+  }
+}
