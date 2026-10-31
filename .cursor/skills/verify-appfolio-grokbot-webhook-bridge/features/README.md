@@ -4,7 +4,7 @@ This directory is the maintained source for verifying the user-facing HTTP behav
 
 ## Baseline preconditions
 
-- Repository root, dependencies installed with `npm ci`, `vercel` and `lsof` and `curl` on `PATH`.
+- Repository root, dependencies installed with `pnpm install --frozen-lockfile`, `vercel` and `lsof` and `curl` on `PATH`.
 - One bridge started by `launch.mjs` for this checkout. Export `RUN_DIR`, `EVIDENCE_DIR`, and `BASE_URL` from its stdout.
 - Doctor prints `ok` for that `RUN_DIR` before the first drive and after any failed drive.
 - `$RUN_DIR/upstream-status` is `204` unless the upstream-failure recipe has not yet restored it.

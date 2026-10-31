@@ -3,5 +3,5 @@
   "framework": null,
   "buildCommand": "",
   "outputDirectory": "",
-  "installCommand": "npm ci"
+  "installCommand": "pnpm install --frozen-lockfile"
 }

@@ -180,7 +180,7 @@ if (overrides.length > 0) {
 }
 
 if (!existsSync(path.join(root, "node_modules", "jose", "package.json"))) {
-  fail("node_modules/jose is missing. Run npm ci from the repo root.");
+  fail("node_modules/jose is missing. Run pnpm install --frozen-lockfile from the repo root.");
 }
 
 const nodeMajor = Number(process.versions.node.split(".")[0]);
