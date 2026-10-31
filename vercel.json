@@ -3,10 +3,5 @@
   "framework": null,
   "buildCommand": "",
   "outputDirectory": "",
-  "installCommand": "npm ci",
-  "functions": {
-    "api/**/*.ts": {
-      "runtime": "@vercel/node@5.1.14"
-    }
-  }
+  "installCommand": "npm ci"
 }

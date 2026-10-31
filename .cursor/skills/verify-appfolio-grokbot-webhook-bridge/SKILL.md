@@ -15,7 +15,7 @@ Run every command from the repository root. Drive one long-lived bridge per chec
 
 ## Launch
 
-Preconditions: Node `>= 20`, `npm ci` already run, `vercel` and `lsof` and `curl` on `PATH`. `package.json` must not have a `scripts.dev` that invokes `vercel dev` (the CLI aborts that as a recursive invocation). `.env` and `.env.build` must not assign `GROK_BOT_WEBHOOK_URL`, `GROK_BOT_BEARER_TOKEN`, or `APPFOLIO_JWKS_URL`; `vercel dev` loads those files over the process environment.
+Preconditions: Node 24, `npm ci` already run, `vercel` and `lsof` and `curl` on `PATH`. `package.json` must not have a `scripts.dev` that invokes `vercel dev` (the CLI aborts that as a recursive invocation). `.env` and `.env.build` must not assign `GROK_BOT_WEBHOOK_URL`, `GROK_BOT_BEARER_TOKEN`, or `APPFOLIO_JWKS_URL`; `vercel dev` loads those files over the process environment.
 
 ```bash
 node .cursor/skills/verify-appfolio-grokbot-webhook-bridge/scripts/launch.mjs
