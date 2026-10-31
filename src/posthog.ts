@@ -12,8 +12,9 @@
  * https://posthog.com/docs/logs/installation/nodejs
  * The documented logger is `logs` from `@opentelemetry/api-logs`.
  * Analytics init follows https://posthog.com/docs/libraries/node and
- * https://posthog.com/docs/error-tracking/installation/node — exception
- * autocapture stays off until a later change.
+ * https://posthog.com/docs/error-tracking/installation/node. Uncaught
+ * exceptions and unhandled rejections are autocaptured. Handled failures
+ * go through `captureException` so they still pass `before_send`.
  *
  * PRIVACY: payloads are AppFolio property-management data (tenants,
  * addresses, money). Never send the request body, headers, signature,
@@ -61,12 +62,20 @@ const BEARER_PATTERN = /\bbearer\s+\S+/gi;
 const PROJECT_TOKEN_PATTERN = /\b(?:phc|phx|crsr)_[A-Za-z0-9_-]+/gi;
 const DETACHED_JWS_PATTERN = /\b[A-Za-z0-9_-]{8,}\.\.[A-Za-z0-9_-]{8,}\b/g;
 
+/** Where a handled failure was caught. Not an AppFolio payload field. */
+export type ExceptionSource = "config" | "webhook" | "upstream";
+
 export type BridgeTelemetry = {
   /** False when `POSTHOG_PROJECT_KEY` is unset or client setup threw. */
   readonly enabled: boolean;
   readonly serviceName: string;
   readonly environment: string;
   readonly serviceVersion: string;
+  /**
+   * Record a handled failure. Never throws.
+   * Adds only `source`. Privacy scrubbing still runs on the exception event.
+   */
+  captureException(error: unknown, source: ExceptionSource): void;
   /**
    * Send queued analytics events and log records. Never throws.
    * Use this before a serverless function returns. Does not disable the client.
@@ -80,6 +89,11 @@ export type BridgeTelemetry = {
 };
 
 type AnalyticsClient = {
+  captureException?: (
+    error: unknown,
+    distinctId?: string,
+    additionalProperties?: Record<string, unknown>,
+  ) => void;
   flush: () => Promise<void>;
   shutdown: (timeoutMs?: number) => Promise<void>;
 };
@@ -162,6 +176,13 @@ export function createBridgeTelemetry(
     serviceName: POSTHOG_SERVICE_NAME,
     environment,
     serviceVersion,
+    captureException(error, source) {
+      try {
+        analytics.captureException?.(error, POSTHOG_DISTINCT_ID, { source });
+      } catch {
+        // Telemetry must not change the HTTP status AppFolio sees.
+      }
+    },
     flush() {
       return settleWithin(
         Promise.allSettled([analytics.flush(), logs.forceFlush()]),
@@ -189,6 +210,9 @@ function disabledTelemetry(
     serviceName: POSTHOG_SERVICE_NAME,
     environment,
     serviceVersion,
+    captureException() {
+      return undefined;
+    },
     flush: async () => undefined,
     shutdown: async () => undefined,
   };
@@ -230,6 +254,7 @@ function analyticsOptions(
     flushAt: 1,
     flushInterval: 0,
     disableGeoip: true,
+    enableExceptionAutocapture: true,
     requestTimeout: POSTHOG_FLUSH_TIMEOUT_MS,
     fetchRetryCount: 0,
     preloadFeatureFlags: false,
