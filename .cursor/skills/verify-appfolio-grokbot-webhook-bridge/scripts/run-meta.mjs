@@ -8,6 +8,7 @@ import {
   readdirSync,
   realpathSync,
   renameSync,
+  rmSync,
   writeFileSync,
   writeSync,
 } from "node:fs";
@@ -334,6 +335,32 @@ export function assertOutsideRepo(dir, root) {
     throw new Error(`${resolved} is an ancestor of the repo`);
   }
   return resolved;
+}
+
+export function releaseOwnedLock(lockPath, runDir) {
+  try {
+    const lock = readLock(lockPath);
+    if (lock && canonicalPath(String(lock.runDir)) === canonicalPath(runDir)) {
+      rmSync(lockPath, { force: true });
+    }
+  } catch {
+    // Leave an unreadable lock for explicit cleanup.
+  }
+}
+
+export function beginOwnedRun({ lockPath, runDir, evidenceDir, starter, meta }) {
+  if (!tryCreateLock(lockPath, starter)) {
+    return false;
+  }
+  try {
+    claimDedicatedRunDir(runDir);
+    writeMeta({ ...meta, runDir, evidenceDir });
+    mkdirSync(evidenceDir, { recursive: true });
+    return true;
+  } catch (err) {
+    releaseOwnedLock(lockPath, runDir);
+    throw err;
+  }
 }
 
 export function claimDedicatedRunDir(runDir) {

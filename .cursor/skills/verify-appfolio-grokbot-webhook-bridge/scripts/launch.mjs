@@ -1,14 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import {
-  closeSync,
-  existsSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  rmSync,
-} from "node:fs";
+import { closeSync, existsSync, openSync, readFileSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,11 +10,10 @@ import {
   MISSING_SIGNATURE_BODY,
   assertEvidenceSeparate,
   assertOutsideRepo,
-  claimDedicatedRunDir,
   assertPortOwnedBy,
   captureCount,
   defaultDirs,
-  canonicalPath,
+  beginOwnedRun,
   dotenvBridgeOverrides,
   emit,
   emitErr,
@@ -30,10 +22,9 @@ import {
   isAlive,
   killProcessGroup,
   lockPathFor,
-  readLock,
+  releaseOwnedLock,
   repoRoot,
   sleep,
-  tryCreateLock,
   writeLock,
   writeMeta,
 } from "./run-meta.mjs";
@@ -209,13 +200,6 @@ if (!vercelBin || !existsSync(vercelBin)) {
   fail("vercel CLI is not on PATH. Install it or set VERCEL_BIN.");
 }
 
-try {
-  claimDedicatedRunDir(runDir);
-} catch (err) {
-  fail(err instanceof Error ? err.message : String(err));
-}
-mkdirSync(evidenceDir, { recursive: true });
-
 const lockPath = lockPathFor(root);
 const started = {
   boundariesPid: null,
@@ -258,17 +242,29 @@ function persist() {
   });
 }
 
+const starter = {
+  phase: "starting",
+  launchPid: process.pid,
+  runDir,
+  evidenceDir,
+};
 try {
-  const starter = {
-    phase: "starting",
-    launchPid: process.pid,
-    runDir,
-    evidenceDir,
-  };
-  if (!tryCreateLock(lockPath, starter)) {
+  if (
+    !beginOwnedRun({
+      lockPath,
+      runDir,
+      evidenceDir,
+      starter,
+      meta: snapshot(),
+    })
+  ) {
     fail(existingLockMessage(lockPath), 2);
   }
+} catch (err) {
+  fail(err instanceof Error ? err.message : String(err));
+}
 
+try {
   const boundariesLog = openSync(path.join(runDir, "boundaries.log"), "a");
   const boundaries = spawn(process.execPath, [BOUNDARIES_SCRIPT], {
     cwd: root,
@@ -351,14 +347,7 @@ try {
     }
   }
   if (!groupAlive(started.bridgePid) && !groupAlive(started.boundariesPid)) {
-    try {
-      const lock = readLock(lockPath);
-      if (lock && canonicalPath(String(lock.runDir)) === canonicalPath(runDir)) {
-        rmSync(lockPath, { force: true });
-      }
-    } catch {
-      // Leave an unreadable lock for explicit cleanup.
-    }
+    releaseOwnedLock(lockPath, runDir);
   }
   emitErr(
     `Launch failed. Inspect ${path.join(runDir, "vercel.log")} then run: node .cursor/skills/verify-appfolio-grokbot-webhook-bridge/scripts/cleanup.mjs --run-dir ${runDir}`,

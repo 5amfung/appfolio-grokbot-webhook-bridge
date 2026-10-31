@@ -15,6 +15,7 @@ import {
   RUN_SENTINEL_NAME,
   assertDedicatedRunDir,
   assertOutsideRepo,
+  beginOwnedRun,
   claimDedicatedRunDir,
   existingLockMessage,
 } from "../.cursor/skills/verify-appfolio-grokbot-webhook-bridge/scripts/run-meta.mjs";
@@ -26,6 +27,26 @@ function tempPath(name) {
   const dir = mkdtempSync(path.join(tmpdir(), "verify-run-safety-"));
   scratch.push(dir);
   return path.join(dir, name);
+}
+
+function ownedRunFixture() {
+  const root = tempPath("checkout");
+  mkdirSync(root);
+  return {
+    root,
+    runDir: path.join(root, "run"),
+    evidenceDir: path.join(root, "evidence"),
+    lockPath: path.join(root, "verify-bridge.lock"),
+  };
+}
+
+function starterFor(fixture) {
+  return {
+    phase: "starting",
+    launchPid: 1,
+    runDir: fixture.runDir,
+    evidenceDir: fixture.evidenceDir,
+  };
 }
 
 afterEach(() => {
@@ -87,5 +108,60 @@ describe("verification run directory safety", () => {
     );
     expect(readFileSync(lockPath, "utf8")).toBe(body);
     expect(existsSync(lockPath)).toBe(true);
+  });
+
+  it("does not create a run directory when the checkout lock already exists", () => {
+    const fixture = ownedRunFixture();
+    const body = `${JSON.stringify({ runDir: "/tmp/old-run", launchPid: 1 })}\n`;
+    writeFileSync(fixture.lockPath, body);
+    expect(
+      beginOwnedRun({
+        ...fixture,
+        starter: starterFor(fixture),
+        meta: { boundariesPid: null, bridgePid: null },
+      }),
+    ).toBe(false);
+    expect(existsSync(fixture.runDir)).toBe(false);
+    expect(existsSync(fixture.evidenceDir)).toBe(false);
+    expect(readFileSync(fixture.lockPath, "utf8")).toBe(body);
+  });
+
+  it("writes cleanup metadata once the lock is acquired", () => {
+    const fixture = ownedRunFixture();
+    expect(
+      beginOwnedRun({
+        ...fixture,
+        starter: starterFor(fixture),
+        meta: { boundariesPid: null, bridgePid: null, lockPath: fixture.lockPath },
+      }),
+    ).toBe(true);
+    expect(assertDedicatedRunDir(fixture.runDir, repo)).toBe(
+      assertOutsideRepo(fixture.runDir, repo),
+    );
+    expect(existsSync(fixture.evidenceDir)).toBe(true);
+    expect(
+      beginOwnedRun({
+        ...fixture,
+        starter: starterFor(fixture),
+        meta: { boundariesPid: null, bridgePid: null },
+      }),
+    ).toBe(false);
+    expect(existsSync(path.join(fixture.runDir, "meta.json"))).toBe(true);
+  });
+
+  it("releases the lock when the run directory cannot be claimed", () => {
+    const fixture = ownedRunFixture();
+    mkdirSync(fixture.runDir);
+    writeFileSync(path.join(fixture.runDir, "keep-me"), "untouched");
+    expect(() =>
+      beginOwnedRun({
+        ...fixture,
+        starter: starterFor(fixture),
+        meta: { boundariesPid: null, bridgePid: null },
+      }),
+    ).toThrow(/new empty directory/);
+    expect(existsSync(fixture.lockPath)).toBe(false);
+    expect(existsSync(path.join(fixture.runDir, "keep-me"))).toBe(true);
+    expect(existsSync(path.join(fixture.runDir, RUN_SENTINEL_NAME))).toBe(false);
   });
 });
