@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/compare/v0.2.0...v0.2.1) (2026-10-31)
+
+
+### Bug Fixes
+
+* switch installs from npm to pnpm ([af22bbc](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/commit/af22bbc12dde2ac12747009413589a2f693c0a33))
+* switch installs from npm to pnpm ([#11](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/issues/11)) ([af22bbc](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/commit/af22bbc12dde2ac12747009413589a2f693c0a33))
+
 ## [0.2.0](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/compare/v0.1.0...v0.2.0) (2026-10-31)
 
 
