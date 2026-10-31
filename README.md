@@ -71,10 +71,10 @@ No `event_id` store in v1 — idempotency is the Bot / downstream.
 Requires Node 24 (`package.json` `engines` is `24.x`. CI runs Node 24).
 
 ```bash
-npm install
-npm run typecheck
-npm test
-npx vercel dev   # after setting env (vercel env pull or .env)
+pnpm install
+pnpm run typecheck
+pnpm test
+pnpm dlx vercel dev   # after setting env (vercel env pull or .env)
 ```
 
 `package.json` has no `dev` script. `vercel dev` runs `scripts.dev` when one is set, and a `dev` script of `vercel dev` aborts as a recursive invocation.
