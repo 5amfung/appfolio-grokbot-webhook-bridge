@@ -4,7 +4,7 @@ Thin HTTPS verify-and-forward for AppFolio webhooks → Grok Bot.
 
 AppFolio signs with detached JWS (`X-JWS-Signature`, PS256). Grok Bot expects `Authorization: Bearer crsr_…`. This service verifies AppFolio, then forwards the **raw** JSON body to the Bot webhook URL.
 
-Deploy target: Vercel (CI deploys on merge to `main`). Custom domain required so AppFolio’s company-owned-domain rule is satisfied.
+Deploy target: Vercel. Production updates only when a release merges. See [Releases and deployment](#releases-and-deployment). Custom domain required so AppFolio’s company-owned-domain rule is satisfied.
 
 ## Routes
 
@@ -78,6 +78,24 @@ pnpm dlx vercel dev   # after setting env (vercel env pull or .env)
 ```
 
 `package.json` has no `dev` script. `vercel dev` runs `scripts.dev` when one is set, and a `dev` script of `vercel dev` aborts as a recursive invocation.
+
+## Releases and deployment
+
+Use a [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) title on each pull request. Squash-merge it so that the title is the commit subject on `main`.
+
+Release Please runs on every push to `main`. It keeps one release pull request open. That pull request bumps the version in `package.json` and writes `CHANGELOG.md`. Do not edit the changelog by hand. Merge the release pull request to create the git tag and the GitHub Release.
+
+The release commit subject is `chore(main): release X.Y.Z`. GitHub appends ` (#N)` on a squash merge. `include-component-in-tag` is false, so the subject has no package name and the tag is `vX.Y.Z`.
+
+Vercel keeps its Git integration. `vercel.json` points `ignoreCommand` at `scripts/vercel-ignore-build.sh`.
+
+- A preview deployment always builds.
+- A production deployment builds only when a line of the commit message is that release subject.
+- Any other merge to `main` is skipped. Vercel shows that deployment as canceled.
+
+The Ignored Build Step leaves the Vercel Git integration in place. A Vercel CLI production deploy needs a Vercel token in Actions secrets. A Deploy Hook needs the hook URL as a secret. This repo stores neither secret, and the Git integration still deploys the release commit.
+
+Release Please uses the default `GITHUB_TOKEN`. GitHub does not start workflows for a pull request that token opens, so the release pull request does not run CI. CI runs when the release pull request merges to `main`.
 
 ## Design
 

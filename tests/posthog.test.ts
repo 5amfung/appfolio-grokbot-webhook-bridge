@@ -3,6 +3,7 @@ import { ExportResultCode } from "@opentelemetry/core";
 import type { LogRecordExporter, ReadableLogRecord } from "@opentelemetry/sdk-logs";
 import type { PostHogOptions } from "posthog-node";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import packageJson from "../package.json" with { type: "json" };
 import {
   DEFAULT_DEPLOYMENT_ENVIRONMENT,
   DEFAULT_POSTHOG_HOST,
@@ -172,7 +173,7 @@ describe("createBridgeTelemetry", () => {
       },
     );
     expect(telemetry.environment).toBe(DEFAULT_DEPLOYMENT_ENVIRONMENT);
-    expect(telemetry.serviceVersion).toBe("0.1.0");
+    expect(telemetry.serviceVersion).toBe(packageJson.version);
   });
 
   it("forces the bridge distinct id and strips payload, header, and secret fields", () => {
