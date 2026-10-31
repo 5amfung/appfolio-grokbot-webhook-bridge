@@ -1,0 +1,7 @@
+---
+description: Read and follow the pstack poteto-mode skill at the start of every task
+alwaysApply: true
+---
+
+At the start of every task, read the installed pstack plugin file `skills/poteto-mode/SKILL.md` with the Read tool and follow it. Do this even when the message does not contain `/poteto-mode`.
+If the session skill list has no readable copy, search `$HOME/.cursor/plugins` for a path ending in `skills/poteto-mode/SKILL.md` and read the highest plugin version.
