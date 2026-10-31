@@ -3,5 +3,6 @@
   "framework": null,
   "buildCommand": "",
   "outputDirectory": "",
-  "installCommand": "npm ci"
+  "installCommand": "npm ci",
+  "ignoreCommand": "sh scripts/vercel-ignore-build.sh"
 }
