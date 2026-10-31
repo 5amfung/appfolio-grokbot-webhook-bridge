@@ -5,6 +5,8 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
+  readdirSync,
+  realpathSync,
   renameSync,
   writeFileSync,
   writeSync,
@@ -16,6 +18,8 @@ export const VERIFY_KID = "verify-bridge";
 export const MISSING_SIGNATURE_BODY =
   '{"error":"missing X-JWS-Signature header"}';
 export const HEALTH_BODY = '{"ok":true}';
+export const RUN_SENTINEL_NAME = ".verify-bridge-run";
+const RUN_SENTINEL_BODY = "verify-appfolio-grokbot-webhook-bridge\n";
 
 const BRIDGE_ENV_KEYS = [
   "GROK_BOT_WEBHOOK_URL",
@@ -249,14 +253,71 @@ export function defaultDirs() {
   };
 }
 
-export function assertOutsideRepo(dir, root) {
+export function canonicalPath(dir) {
   const resolved = path.resolve(dir);
-  const repo = path.resolve(root);
+  let current = resolved;
+  const missing = [];
+  while (!existsSync(current)) {
+    const parent = path.dirname(current);
+    if (parent === current) {
+      break;
+    }
+    missing.push(path.basename(current));
+    current = parent;
+  }
+  const base = existsSync(current) ? realpathSync(current) : current;
+  return missing.length === 0 ? base : path.join(base, ...missing.reverse());
+}
+
+export function assertOutsideRepo(dir, root) {
+  const resolved = canonicalPath(dir);
+  const repo = canonicalPath(root);
   if (resolved === path.parse(resolved).root) {
     throw new Error(`Refusing filesystem root: ${resolved}`);
   }
   if (resolved === repo || resolved.startsWith(`${repo}${path.sep}`)) {
     throw new Error(`${resolved} is inside the repo`);
+  }
+  if (repo.startsWith(`${resolved}${path.sep}`)) {
+    throw new Error(`${resolved} is an ancestor of the repo`);
+  }
+  return resolved;
+}
+
+export function claimDedicatedRunDir(runDir) {
+  if (existsSync(runDir)) {
+    const entries = readdirSync(runDir);
+    if (entries.length > 0) {
+      throw new Error(
+        `Refusing ${runDir}: a run directory must be a new empty directory`,
+      );
+    }
+  } else {
+    mkdirSync(runDir, { recursive: true });
+  }
+  writeFileSync(path.join(runDir, RUN_SENTINEL_NAME), RUN_SENTINEL_BODY, {
+    flag: "wx",
+  });
+}
+
+export function assertDedicatedRunDir(runDir, root) {
+  const resolved = assertOutsideRepo(runDir, root);
+  const sentinelPath = path.join(resolved, RUN_SENTINEL_NAME);
+  if (!existsSync(sentinelPath)) {
+    throw new Error(
+      `Refusing to delete ${resolved}: not a dedicated verification run directory`,
+    );
+  }
+  if (readFileSync(sentinelPath, "utf8") !== RUN_SENTINEL_BODY) {
+    throw new Error(
+      `Refusing to delete ${resolved}: run sentinel is not from this harness`,
+    );
+  }
+  const meta = readMeta(resolved);
+  if (canonicalPath(meta.runDir) !== resolved) {
+    throw new Error(
+      `Refusing to delete ${resolved}: meta.json runDir does not match this directory`,
+    );
   }
   return resolved;
 }

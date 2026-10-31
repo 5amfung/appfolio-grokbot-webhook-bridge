@@ -30,7 +30,7 @@ BASE_URL=http://127.0.0.1:<port>
 META=<run dir>/meta.json
 ```
 
-`RUN_DIR` and `EVIDENCE_DIR` default under `${TMPDIR:-/tmp}/verify-appfolio-grokbot-webhook-bridge/<run-id>/` as sibling `run` and `evidence` directories, outside the repo. Override both `VERIFY_RUN_DIR` and `VERIFY_EVIDENCE_DIR`, or neither. Optional: `VERIFY_ROOT`, `VERIFY_RUN_ID`, `VERCEL_BIN`.
+`RUN_DIR` and `EVIDENCE_DIR` default under `${TMPDIR:-/tmp}/verify-appfolio-grokbot-webhook-bridge/<run-id>/` as sibling `run` and `evidence` directories, outside the repo. Override both `VERIFY_RUN_DIR` and `VERIFY_EVIDENCE_DIR`, or neither. `VERIFY_RUN_DIR` must be a new empty directory. Launch rejects the repo, anything inside it, and any ancestor of it, including through a symlink. Cleanup deletes a run directory only when it contains this harness's sentinel and `meta.json` names that same directory. Optional: `VERIFY_ROOT`, `VERIFY_RUN_ID`, `VERCEL_BIN`.
 
 Launch starts a local JWKS and capture server, then:
 

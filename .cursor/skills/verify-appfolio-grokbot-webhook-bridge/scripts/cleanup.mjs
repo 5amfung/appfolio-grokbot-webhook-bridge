@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import { existsSync, rmSync } from "node:fs";
 import {
+  assertDedicatedRunDir,
   assertEvidenceSeparate,
   assertOutsideRepo,
+  canonicalPath,
   emit,
   emitErr,
   isAlive,
@@ -16,9 +18,9 @@ import {
 
 try {
   const args = parseArgs(process.argv.slice(2));
-  const runDir = requireArg(args, "run-dir");
+  const requestedRunDir = requireArg(args, "run-dir");
   const root = repoRoot();
-  assertOutsideRepo(runDir, root);
+  const runDir = assertDedicatedRunDir(requestedRunDir, root);
   const meta = readMeta(runDir);
   const evidenceDir = meta.evidenceDir;
   if (typeof evidenceDir !== "string" || evidenceDir.length === 0) {
@@ -38,7 +40,9 @@ try {
     let ownsLock = false;
     try {
       const lock = readLock(meta.lockPath);
-      ownsLock = Boolean(lock && lock.runDir === runDir);
+      ownsLock = Boolean(
+        lock && canonicalPath(String(lock.runDir)) === runDir,
+      );
     } catch {
       ownsLock = false;
     }

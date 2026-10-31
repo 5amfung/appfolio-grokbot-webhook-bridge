@@ -17,6 +17,7 @@ import {
   MISSING_SIGNATURE_BODY,
   assertEvidenceSeparate,
   assertOutsideRepo,
+  claimDedicatedRunDir,
   assertPortOwnedBy,
   captureCount,
   defaultDirs,
@@ -206,7 +207,11 @@ if (!vercelBin || !existsSync(vercelBin)) {
   fail("vercel CLI is not on PATH. Install it or set VERCEL_BIN.");
 }
 
-mkdirSync(runDir, { recursive: true });
+try {
+  claimDedicatedRunDir(runDir);
+} catch (err) {
+  fail(err instanceof Error ? err.message : String(err));
+}
 mkdirSync(evidenceDir, { recursive: true });
 
 const lockPath = lockPathFor(root);
