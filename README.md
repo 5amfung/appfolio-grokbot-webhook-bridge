@@ -68,6 +68,8 @@ No `event_id` store in v1 — idempotency is the Bot / downstream.
 
 ## Local development
 
+Requires Node `>= 24` (`package.json` `engines`, CI, and the Vercel project).
+
 ```bash
 npm install
 npm run typecheck

@@ -184,8 +184,8 @@ if (!existsSync(path.join(root, "node_modules", "jose", "package.json"))) {
 }
 
 const nodeMajor = Number(process.versions.node.split(".")[0]);
-if (!Number.isInteger(nodeMajor) || nodeMajor < 20) {
-  fail(`Node >= 20 is required (this process is ${process.versions.node})`);
+if (!Number.isInteger(nodeMajor) || nodeMajor < 24) {
+  fail(`Node >= 24 is required (this process is ${process.versions.node})`);
 }
 
 let vercelBin = process.env.VERCEL_BIN;

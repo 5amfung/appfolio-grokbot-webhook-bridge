@@ -5,7 +5,7 @@
   "description": "Thin HTTPS verify-and-forward for AppFolio webhooks → Grok Bot",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -13,16 +13,17 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@opentelemetry/api": "1.10.0",
     "@opentelemetry/api-logs": "0.223.0",
-    "@opentelemetry/exporter-logs-otlp-http": "0.223.0",
-    "@opentelemetry/resources": "2.12.0",
-    "@opentelemetry/sdk-logs": "0.223.0",
-    "@opentelemetry/sdk-node": "0.223.0",
+    "@opentelemetry/exporter-logs-otlp-http": "0.300.0",
+    "@opentelemetry/resources": "3.0.0",
+    "@opentelemetry/sdk-logs": "3.0.0",
+    "@opentelemetry/sdk-node": "0.300.0",
     "jose": "^6.0.11",
-    "posthog-node": "^5.61.1"
+    "posthog-node": "5.61.1"
   },
   "devDependencies": {
-    "@types/node": "^22.15.3",
+    "@types/node": "^24.19.2",
     "@vercel/node": "^5.1.14",
     "typescript": "^5.8.3",
     "vitest": "^3.1.2"
