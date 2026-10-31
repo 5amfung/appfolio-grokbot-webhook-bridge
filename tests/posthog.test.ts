@@ -46,6 +46,7 @@ describe("createBridgeTelemetry", () => {
       });
       expect(telemetry.enabled).toBe(false);
       expect(telemetry.serviceName).toBe(POSTHOG_SERVICE_NAME);
+      telemetry.captureException(new Error("unused"), "config");
       await telemetry.flush();
       await telemetry.shutdown();
     }
@@ -96,7 +97,7 @@ describe("createBridgeTelemetry", () => {
         serviceVersion: "abc123",
       },
     });
-    expect(options.enableExceptionAutocapture).toBeUndefined();
+    expect(options.enableExceptionAutocapture).toBe(true);
 
     expect(startLogs).toHaveBeenCalledOnce();
     expect(startLogs.mock.calls[0]?.[0]).toEqual({
@@ -231,6 +232,74 @@ describe("createBridgeTelemetry", () => {
     expect(serialized).not.toContain("bot.example");
     expect(serialized).not.toContain("header..signature");
     expect(serialized).not.toContain("Bearer");
+
+    const exceptionEvent = beforeSend({
+      event: "$exception",
+      distinctId: "tenant-42",
+      properties: {
+        source: "upstream",
+        $exception_message:
+          "fetch failed https://bot.example/hook bearer crsr_secret",
+        $exception_list: [
+          {
+            type: "Error",
+            value: "fetch failed https://bot.example/hook",
+          },
+        ],
+      },
+    });
+    expect(exceptionEvent?.distinctId).toBe(POSTHOG_DISTINCT_ID);
+    expect(exceptionEvent?.properties).toMatchObject({
+      source: "upstream",
+      $exception_message: "fetch failed [redacted-url] bearer [redacted]",
+      $exception_list: [
+        { type: "Error", value: "fetch failed [redacted-url]" },
+      ],
+    });
+    expect(JSON.stringify(exceptionEvent)).not.toContain("bot.example");
+    expect(JSON.stringify(exceptionEvent)).not.toContain("crsr_");
+  });
+
+  it("sends handled exceptions to the analytics client and ignores client throws", () => {
+    const captureException = vi.fn();
+    const telemetry = createBridgeTelemetry(
+      { POSTHOG_PROJECT_KEY: "phc_test" },
+      {
+        createAnalyticsClient: () => ({
+          captureException,
+          flush: async () => undefined,
+          shutdown: async () => undefined,
+        }),
+        startLogs: () => ({
+          forceFlush: async () => undefined,
+          shutdown: async () => undefined,
+        }),
+      },
+    );
+    const error = new Error("upstream returned 502");
+    telemetry.captureException(error, "upstream");
+    expect(captureException).toHaveBeenCalledOnce();
+    expect(captureException).toHaveBeenCalledWith(error, POSTHOG_DISTINCT_ID, {
+      source: "upstream",
+    });
+
+    const throwing = createBridgeTelemetry(
+      { POSTHOG_PROJECT_KEY: "phc_test" },
+      {
+        createAnalyticsClient: () => ({
+          captureException() {
+            throw new Error("posthog down");
+          },
+          flush: async () => undefined,
+          shutdown: async () => undefined,
+        }),
+        startLogs: () => ({
+          forceFlush: async () => undefined,
+          shutdown: async () => undefined,
+        }),
+      },
+    );
+    expect(() => throwing.captureException(error, "webhook")).not.toThrow();
   });
 
   it("swallows flush and shutdown failures", async () => {
