@@ -10,8 +10,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "dev": "vercel dev"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "jose": "^6.0.11"
