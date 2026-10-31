@@ -21,12 +21,14 @@ import {
   assertPortOwnedBy,
   captureCount,
   defaultDirs,
+  canonicalPath,
   dotenvBridgeOverrides,
   emit,
   emitErr,
+  existingLockMessage,
+  groupAlive,
   isAlive,
   killProcessGroup,
-  lockHoldersAlive,
   lockPathFor,
   readLock,
   repoRoot,
@@ -264,23 +266,7 @@ try {
     evidenceDir,
   };
   if (!tryCreateLock(lockPath, starter)) {
-    let existing;
-    try {
-      existing = readLock(lockPath);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      fail(`Checkout lock is unreadable at ${lockPath}: ${message}`);
-    }
-    if (lockHoldersAlive(existing)) {
-      fail(
-        `Another verification bridge holds ${lockPath} (runDir=${existing?.runDir ?? "unknown"}). Run cleanup.mjs --run-dir on that run, or leave the existing bridge alone. This checkout runs one bridge.`,
-        2,
-      );
-    }
-    rmSync(lockPath, { force: true });
-    if (!tryCreateLock(lockPath, starter)) {
-      fail(`Lost the race for ${lockPath}`, 2);
-    }
+    fail(existingLockMessage(lockPath), 2);
   }
 
   const boundariesLog = openSync(path.join(runDir, "boundaries.log"), "a");
@@ -364,8 +350,15 @@ try {
       emitErr(`could not write meta: ${writeMessage}`);
     }
   }
-  if (!isAlive(started.bridgePid) && !isAlive(started.boundariesPid)) {
-    rmSync(lockPath, { force: true });
+  if (!groupAlive(started.bridgePid) && !groupAlive(started.boundariesPid)) {
+    try {
+      const lock = readLock(lockPath);
+      if (lock && canonicalPath(String(lock.runDir)) === canonicalPath(runDir)) {
+        rmSync(lockPath, { force: true });
+      }
+    } catch {
+      // Leave an unreadable lock for explicit cleanup.
+    }
   }
   emitErr(
     `Launch failed. Inspect ${path.join(runDir, "vercel.log")} then run: node .cursor/skills/verify-appfolio-grokbot-webhook-bridge/scripts/cleanup.mjs --run-dir ${runDir}`,

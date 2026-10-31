@@ -148,19 +148,58 @@ function signalGroup(pid, signal) {
   }
 }
 
-export function killProcessGroup(pid) {
-  if (!Number.isInteger(pid) || pid <= 0 || !isAlive(pid)) {
-    return false;
+export function processGroupPids(leaderPid) {
+  if (!Number.isInteger(leaderPid) || leaderPid <= 0) {
+    return [];
   }
-  if (!signalGroup(pid, "SIGTERM")) {
-    return false;
+  let out = "";
+  try {
+    out = execFileSync("ps", ["-axo", "pid=,pgid=,stat="], {
+      encoding: "utf8",
+    });
+  } catch {
+    return isAlive(leaderPid) ? [leaderPid] : [];
   }
-  const deadline = Date.now() + 1000;
-  while (Date.now() < deadline && isAlive(pid)) {
+  const pids = [];
+  for (const line of out.split("\n")) {
+    const parts = line.trim().split(/\s+/);
+    if (parts.length < 3) {
+      continue;
+    }
+    const pid = Number(parts[0]);
+    const pgid = Number(parts[1]);
+    const stat = parts[2];
+    if (pgid !== leaderPid || !Number.isInteger(pid) || pid <= 0) {
+      continue;
+    }
+    if (stat.startsWith("Z")) {
+      continue;
+    }
+    pids.push(pid);
+  }
+  return pids;
+}
+
+export function groupAlive(leaderPid) {
+  return processGroupPids(leaderPid).length > 0;
+}
+
+function waitForGroupExit(leaderPid, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline && groupAlive(leaderPid)) {
     sleep(50);
   }
-  if (isAlive(pid)) {
+}
+
+export function killProcessGroup(pid) {
+  if (!Number.isInteger(pid) || pid <= 0 || !groupAlive(pid)) {
+    return false;
+  }
+  signalGroup(pid, "SIGTERM");
+  waitForGroupExit(pid, 1000);
+  if (groupAlive(pid)) {
     signalGroup(pid, "SIGKILL");
+    waitForGroupExit(pid, 500);
   }
   return true;
 }
@@ -220,9 +259,22 @@ export function lockHoldersAlive(lock) {
   if (!lock) {
     return false;
   }
-  return [lock.launchPid, lock.boundariesPid, lock.bridgePid].some((pid) =>
-    isAlive(pid),
+  return [lock.launchPid, lock.boundariesPid, lock.bridgePid].some(
+    (pid) => isAlive(pid) || groupAlive(pid),
   );
+}
+
+export function existingLockMessage(lockPath) {
+  let existing;
+  try {
+    existing = readLock(lockPath);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return `Checkout lock is unreadable at ${lockPath}: ${message}`;
+  }
+  const runDir = existing?.runDir ?? "unknown";
+  const alive = lockHoldersAlive(existing);
+  return `Checkout lock ${lockPath} is already present (runDir=${runDir}, processGroupAlive=${alive}). Run cleanup.mjs --run-dir on that run before launching another bridge. Launch does not remove an existing lock.`;
 }
 
 export function defaultDirs() {

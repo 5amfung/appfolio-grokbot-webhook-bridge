@@ -2,6 +2,7 @@ import {
   existsSync,
   mkdtempSync,
   mkdirSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -15,6 +16,7 @@ import {
   assertDedicatedRunDir,
   assertOutsideRepo,
   claimDedicatedRunDir,
+  existingLockMessage,
 } from "../.cursor/skills/verify-appfolio-grokbot-webhook-bridge/scripts/run-meta.mjs";
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -74,5 +76,16 @@ describe("verification run directory safety", () => {
     expect(() => assertDedicatedRunDir(path.dirname(repo), repo)).toThrow(
       /ancestor of the repo/,
     );
+  });
+
+  it("reports an existing lock without deleting it", () => {
+    const lockPath = tempPath("verify-bridge.lock");
+    const body = `${JSON.stringify({ runDir: "/tmp/old-run", launchPid: 1 })}\n`;
+    writeFileSync(lockPath, body);
+    expect(existingLockMessage(lockPath)).toMatch(
+      /does not remove an existing lock/,
+    );
+    expect(readFileSync(lockPath, "utf8")).toBe(body);
+    expect(existsSync(lockPath)).toBe(true);
   });
 });

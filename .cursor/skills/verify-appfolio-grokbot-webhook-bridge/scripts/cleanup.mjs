@@ -7,7 +7,7 @@ import {
   canonicalPath,
   emit,
   emitErr,
-  isAlive,
+  groupAlive,
   killProcessGroup,
   parseArgs,
   readLock,
@@ -32,8 +32,10 @@ try {
 
   const stoppedBoundaries = killProcessGroup(meta.boundariesPid);
   const stoppedBridge = killProcessGroup(meta.bridgePid);
-  if (isAlive(meta.boundariesPid) || isAlive(meta.bridgePid)) {
-    throw new Error("a recorded pid is still alive after SIGTERM and SIGKILL");
+  if (groupAlive(meta.boundariesPid) || groupAlive(meta.bridgePid)) {
+    throw new Error(
+      "a recorded process group is still alive after SIGTERM and SIGKILL",
+    );
   }
 
   if (meta.lockPath && existsSync(meta.lockPath)) {
