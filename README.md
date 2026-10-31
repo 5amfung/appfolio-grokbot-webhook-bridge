@@ -20,8 +20,30 @@ Deploy target: Vercel (CI deploys on merge to `main`). Custom domain required so
 | `GROK_BOT_WEBHOOK_URL` | yes | Full URL of the Grok Bot inbound webhook |
 | `GROK_BOT_BEARER_TOKEN` | yes | Bearer token (`crsr_…`) |
 | `APPFOLIO_JWKS_URL` | no | Override JWKS URL (default `https://api.appfolio.com/.well-known/jwks.json`) |
+| `POSTHOG_PROJECT_KEY` | no | PostHog project token (`phc_…`). Unset → telemetry is a no-op (no network). Not a personal API key (`phx_…`). |
+| `POSTHOG_HOST` | no | PostHog ingest host (default `https://us.i.posthog.com`; EU Cloud is `https://eu.i.posthog.com`) |
+
+Set `POSTHOG_PROJECT_KEY` (and `POSTHOG_HOST` only if the project is not on US Cloud) in the Vercel project for the environments you want to observe. This repo does not set those variables.
 
 Copy `.env.example` for local `vercel dev`.
+
+## Telemetry (PostHog)
+
+Server-side only (`posthog-node` plus the [Node.js logs](https://posthog.com/docs/logs/installation/nodejs) OpenTelemetry pipeline). There is no browser SDK.
+
+When `POSTHOG_PROJECT_KEY` is unset, `createBridgeTelemetry()` does not construct a client or start OpenTelemetry, so local dev, tests, and CI make no telemetry calls.
+
+Logs are OTLP records sent to `{POSTHOG_HOST}/i/v1/logs` with this service identity:
+
+| Resource attribute | Value |
+|--------------------|--------|
+| `service.name` | `appfolio-grokbot-webhook-bridge` |
+| `deployment.environment` | `VERCEL_ENV`, or `development` when unset |
+| `service.version` | `VERCEL_GIT_COMMIT_SHA`, or this package's `version` |
+
+Console log autocapture is off. Do not send request bodies, headers, signatures, bearer tokens, upstream URLs, or AppFolio payload fields. Later captures use the fixed distinct id `appfolio-grokbot-webhook-bridge` and disable person profiles.
+
+Webhook outcome events, exception capture, and metric calls are not recorded yet. The client is ready for that follow-up: create it once per isolate, `await telemetry.flush()` before the function returns, and `await telemetry.shutdown()` on process exit. Flush and shutdown swallow failures and give up after one second, so a PostHog outage cannot change the HTTP status or hang AppFolio.
 
 ## Raw body on Vercel (important)
 
