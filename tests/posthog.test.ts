@@ -258,6 +258,45 @@ describe("createBridgeTelemetry", () => {
     await expect(telemetry.shutdown()).resolves.toBeUndefined();
   });
 
+  it("awaits the other pipeline when one flush or shutdown fails", async () => {
+    let logsFlushed = false;
+    let analyticsShutDown = false;
+    const telemetry = createBridgeTelemetry(
+      { POSTHOG_PROJECT_KEY: "phc_test" },
+      {
+        createAnalyticsClient: () => ({
+          flush: async () => {
+            throw new Error("posthog down");
+          },
+          shutdown: () =>
+            new Promise((resolve) => {
+              setTimeout(() => {
+                analyticsShutDown = true;
+                resolve();
+              }, 40);
+            }),
+        }),
+        startLogs: () => ({
+          forceFlush: () =>
+            new Promise((resolve) => {
+              setTimeout(() => {
+                logsFlushed = true;
+                resolve();
+              }, 40);
+            }),
+          shutdown: async () => {
+            throw new Error("logs down");
+          },
+        }),
+      },
+    );
+
+    await telemetry.flush();
+    expect(logsFlushed).toBe(true);
+    await telemetry.shutdown();
+    expect(analyticsShutDown).toBe(true);
+  });
+
   it("returns a no-op when client setup throws", async () => {
     const telemetry = createBridgeTelemetry(
       { POSTHOG_PROJECT_KEY: "phc_test" },

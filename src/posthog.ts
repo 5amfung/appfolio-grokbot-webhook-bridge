@@ -23,9 +23,7 @@
  * Vercel env/region, commit sha). Every capture uses
  * `POSTHOG_DISTINCT_ID` and `$process_person_profile: false`.
  */
-import { logs as otelLogs } from "@opentelemetry/api";
 import { logs as documentedLogs } from "@opentelemetry/api-logs";
-import type { LoggerProvider as DocumentedLoggerProvider } from "@opentelemetry/api-logs";
 import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
 import { resourceFromAttributes } from "@opentelemetry/resources";
 import {
@@ -164,13 +162,13 @@ export function createBridgeTelemetry(
     serviceVersion,
     flush() {
       return settleWithin(
-        Promise.all([analytics.flush(), logs.forceFlush()]),
+        Promise.allSettled([analytics.flush(), logs.forceFlush()]),
         POSTHOG_FLUSH_TIMEOUT_MS,
       );
     },
     shutdown() {
       return settleWithin(
-        Promise.all([
+        Promise.allSettled([
           analytics.shutdown(POSTHOG_FLUSH_TIMEOUT_MS),
           logs.shutdown(),
         ]),
@@ -301,19 +299,15 @@ function startLogsPipeline(
     metricReaders: [],
     spanProcessors: [],
   });
-  // Replace any provider left by a previous isolate in this process so the
-  // documented `@opentelemetry/api-logs` import sees this pipeline.
+  // `setGlobalLoggerProvider` keeps the first provider. Clear any provider
+  // left in this process so `sdk.start()` registers this pipeline on
+  // `@opentelemetry/api-logs`, which is the logger the Node logs guide uses.
   documentedLogs.disable();
-  otelLogs.disable();
-  sdk.start();
   try {
-    documentedLogs.setGlobalLoggerProvider(
-      otelLogs.getLoggerProvider() as unknown as DocumentedLoggerProvider,
-    );
+    sdk.start();
   } catch (error) {
     void sdk.shutdown();
     documentedLogs.disable();
-    otelLogs.disable();
     throw error;
   }
   return {
@@ -323,7 +317,6 @@ function startLogsPipeline(
         await sdk.shutdown();
       } finally {
         documentedLogs.disable();
-        otelLogs.disable();
       }
     },
   };
