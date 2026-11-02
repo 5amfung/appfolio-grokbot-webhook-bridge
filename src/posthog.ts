@@ -48,8 +48,7 @@ export const DEFAULT_POSTHOG_HOST = "https://us.i.posthog.com";
 
 export const DEFAULT_DEPLOYMENT_ENVIRONMENT = "development";
 
-/** Cap ingest waits so a PostHog outage cannot stall the webhook. */
-export const POSTHOG_FLUSH_TIMEOUT_MS = 1_000;
+export const POSTHOG_FLUSH_TIMEOUT_MS = 10_000;
 
 const PACKAGE_VERSION = packageJson.version.trim() || "0.0.0";
 
@@ -116,8 +115,8 @@ export type BridgeTelemetry = {
    */
   captureException(error: unknown, source: ExceptionSource): void;
   /**
-   * Queue one `webhook_handled` event. Never throws and does not flush.
-   * The route flushes once after this, including when an exception was also queued.
+   * Queue one `webhook_handled` analytics event and one log record.
+   * Never throws and does not flush.
    */
   captureWebhookHandled(event: WebhookHandledEvent): void;
   /**
@@ -229,15 +228,24 @@ export function createBridgeTelemetry(
       }
     },
     captureWebhookHandled(event) {
+      const properties = {
+        ...webhookHandledProperties(event),
+        environment,
+        serviceVersion,
+      };
+      try {
+        documentedLogs.getLogger(POSTHOG_SERVICE_NAME).emit({
+          severityText: "info",
+          body: WEBHOOK_HANDLED_EVENT,
+          attributes: properties,
+        });
+      } catch {
+      }
       try {
         analytics.capture?.({
           distinctId: POSTHOG_DISTINCT_ID,
           event: WEBHOOK_HANDLED_EVENT,
-          properties: {
-            ...webhookHandledProperties(event),
-            environment,
-            serviceVersion,
-          },
+          properties,
         });
       } catch {
         return undefined;
