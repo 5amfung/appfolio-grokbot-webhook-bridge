@@ -53,6 +53,10 @@ describe("verifyAppfolioJws", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.reason.length).toBeGreaterThan(0);
+      expect(result.classification).toEqual({
+        family: "bad_signature",
+        failure: "signature_invalid",
+      });
     }
   });
 
@@ -62,6 +66,10 @@ describe("verifyAppfolioJws", () => {
     expect(result).toEqual({
       ok: false,
       reason: "missing X-JWS-Signature header",
+      classification: {
+        family: "bad_signature",
+        failure: "missing_signature",
+      },
     });
   });
 
@@ -71,19 +79,80 @@ describe("verifyAppfolioJws", () => {
     expect(result).toEqual({
       ok: false,
       reason: "invalid detached JWS format",
+      classification: {
+        family: "bad_signature",
+        failure: "invalid_detached_jws",
+      },
     });
   });
 
-  it("rejects wrong key / JWKS", async () => {
+  it("rejects a JWKS with no key for the signature kid", async () => {
     const { detached } = await makePs256Fixture(rawBody);
     const other = await generateKeyPair("PS256", { extractable: true });
     const otherJwk = (await exportJWK(other.publicKey)) as JWK;
     otherJwk.alg = "PS256";
-    otherJwk.kid = "test-kid";
+    otherJwk.kid = "other-kid";
     const wrongJwks = createLocalJWKSet({ keys: [otherJwk] });
 
     const result = await verifyAppfolioJws(rawBody, detached, wrongJwks);
     expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.classification).toEqual({
+        family: "signing_key",
+        failure: "jwks_no_matching_key",
+      });
+      expect(result.reason).toBe(
+        "no applicable key found in the JSON Web Key Set",
+      );
+    }
+  });
+
+  it("classifies a JWKS timeout without using the jose message as the token", async () => {
+    const { detached } = await makePs256Fixture(rawBody);
+    const timeout = Object.assign(new Error("request timed out"), {
+      code: "ERR_JWKS_TIMEOUT",
+    });
+    const result = await verifyAppfolioJws(rawBody, detached, async () => {
+      throw timeout;
+    });
+    expect(result).toEqual({
+      ok: false,
+      reason: "request timed out",
+      classification: { family: "signing_key", failure: "jwks_timeout" },
+    });
+  });
+
+  it("classifies a code-less fetch TypeError as a signing-key failure", async () => {
+    const { detached } = await makePs256Fixture(rawBody);
+    const result = await verifyAppfolioJws(rawBody, detached, async () => {
+      throw new TypeError("fetch failed");
+    });
+    expect(result).toEqual({
+      ok: false,
+      reason: "fetch failed",
+      classification: { family: "signing_key", failure: "jwks_fetch_failed" },
+    });
+  });
+
+  it("leaves an unmapped jose code and an inherited code name unclassified", async () => {
+    const { detached } = await makePs256Fixture(rawBody);
+    const unmapped = await verifyAppfolioJws(rawBody, detached, async () => {
+      throw Object.assign(new Error("invalid key"), { code: "ERR_JWK_INVALID" });
+    });
+    expect(unmapped).toEqual({
+      ok: false,
+      reason: "invalid key",
+      classification: { family: "unclassified", failure: "verify_failed" },
+    });
+
+    const inherited = await verifyAppfolioJws(rawBody, detached, async () => {
+      throw Object.assign(new Error("toString"), { code: "toString" });
+    });
+    expect(inherited).toEqual({
+      ok: false,
+      reason: "toString",
+      classification: { family: "unclassified", failure: "verify_failed" },
+    });
   });
 
   it("does not depend on JSON re-stringify (whitespace-sensitive)", async () => {

@@ -15,9 +15,9 @@ Outbound AppFolio event (wire JSON, single-event form):
 
 Handler outcome (discriminated):
 
-- { kind: "unauthorized"; reason: string }
+- { kind: "unauthorized"; reason: string; classification: { family, failure } }
 - { kind: "forwarded"; upstreamStatus: number }
-- { kind: "upstream_failure"; error: string }
+- { kind: "upstream_failure"; error: string; upstreamStatus?: number }
 
 Config (from env, parsed once at cold start):
 

@@ -47,6 +47,11 @@ describe("createBridgeTelemetry", () => {
       expect(telemetry.enabled).toBe(false);
       expect(telemetry.serviceName).toBe(POSTHOG_SERVICE_NAME);
       telemetry.captureException(new Error("unused"), "config");
+      telemetry.captureWebhookHandled({
+        kind: "method_not_allowed",
+        reason: "method_not_allowed",
+        durationMs: 1,
+      });
       await telemetry.flush();
       await telemetry.shutdown();
     }
@@ -300,6 +305,95 @@ describe("createBridgeTelemetry", () => {
       },
     );
     expect(() => throwing.captureException(error, "webhook")).not.toThrow();
+  });
+
+  it("captures webhook_handled with the fixed distinct id and the reason token", () => {
+    const capture = vi.fn();
+    const flush = vi.fn(async () => undefined);
+    const sampleUrl = "https://bot.example/hook";
+    const telemetry = createBridgeTelemetry(
+      { POSTHOG_PROJECT_KEY: "phc_test" },
+      {
+        createAnalyticsClient: () => ({
+          capture,
+          flush,
+          shutdown: async () => undefined,
+        }),
+        startLogs: () => ({
+          forceFlush: async () => undefined,
+          shutdown: async () => undefined,
+        }),
+      },
+    );
+    const event = {
+      kind: "unauthorized" as const,
+      durationMs: 8,
+      family: "bad_signature" as const,
+      reason: "signature_invalid" as const,
+      error: sampleUrl,
+    };
+    telemetry.captureWebhookHandled(event);
+    expect(capture).toHaveBeenCalledOnce();
+    expect(capture).toHaveBeenCalledWith({
+      event: "webhook_handled",
+      distinctId: POSTHOG_DISTINCT_ID,
+      properties: {
+        kind: "unauthorized",
+        reason: "signature_invalid",
+        family: "bad_signature",
+        durationMs: 8,
+      },
+    });
+    expect(JSON.stringify(capture.mock.calls)).toContain("signature_invalid");
+    expect(JSON.stringify(capture.mock.calls)).not.toContain(sampleUrl);
+    expect(flush).not.toHaveBeenCalled();
+
+    const disabledCapture = vi.fn();
+    const disabled = createBridgeTelemetry(
+      {},
+      {
+        createAnalyticsClient: () => ({
+          capture: disabledCapture,
+          flush: async () => undefined,
+          shutdown: async () => undefined,
+        }),
+      },
+    );
+    expect(() => disabled.captureWebhookHandled(event)).not.toThrow();
+    expect(disabledCapture).not.toHaveBeenCalled();
+
+    const missingCapture = createBridgeTelemetry(
+      { POSTHOG_PROJECT_KEY: "phc_test" },
+      {
+        createAnalyticsClient: () => ({
+          flush: async () => undefined,
+          shutdown: async () => undefined,
+        }),
+        startLogs: () => ({
+          forceFlush: async () => undefined,
+          shutdown: async () => undefined,
+        }),
+      },
+    );
+    expect(() => missingCapture.captureWebhookHandled(event)).not.toThrow();
+
+    const throwing = createBridgeTelemetry(
+      { POSTHOG_PROJECT_KEY: "phc_test" },
+      {
+        createAnalyticsClient: () => ({
+          capture() {
+            throw new Error("posthog down");
+          },
+          flush: async () => undefined,
+          shutdown: async () => undefined,
+        }),
+        startLogs: () => ({
+          forceFlush: async () => undefined,
+          shutdown: async () => undefined,
+        }),
+      },
+    );
+    expect(() => throwing.captureWebhookHandled(event)).not.toThrow();
   });
 
   it("swallows flush and shutdown failures", async () => {
