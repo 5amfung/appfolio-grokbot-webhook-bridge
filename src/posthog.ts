@@ -19,9 +19,7 @@
  * PRIVACY: payloads are AppFolio property-management data (tenants,
  * addresses, money). Never send the request body, headers, signature,
  * bearer token, upstream URL, or any payload field. Console log
- * autocapture is off for the same reason. Later events may attach only
- * outcome metadata (kind, reason category, status codes, durations,
- * Vercel env/region, commit sha). Every capture uses
+ * autocapture is off for the same reason. Every capture uses
  * `POSTHOG_DISTINCT_ID` and `$process_person_profile: false`.
  */
 import { logs as otelLogs } from "@opentelemetry/api";
@@ -38,6 +36,8 @@ import {
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { PostHog, type EventMessage, type PostHogOptions } from "posthog-node";
 import packageJson from "../package.json" with { type: "json" };
+import type { ConfigReason } from "./config.js";
+import type { VerifyClassification } from "./verify-appfolio-jws.js";
 
 /** Fixed, non-personal distinct id. Do not replace this with a tenant or user id. */
 export const POSTHOG_DISTINCT_ID = "appfolio-grokbot-webhook-bridge";
@@ -65,6 +65,45 @@ const DETACHED_JWS_PATTERN = /\b[A-Za-z0-9_-]{8,}\.\.[A-Za-z0-9_-]{8,}\b/g;
 /** Where a handled failure was caught. Not an AppFolio payload field. */
 export type ExceptionSource = "config" | "webhook" | "upstream";
 
+const WEBHOOK_HANDLED_EVENT = "webhook_handled";
+
+type UnauthorizedHandled = {
+  [Family in VerifyClassification["family"]]: {
+    kind: "unauthorized";
+    durationMs: number;
+    family: Family;
+    reason: Extract<VerifyClassification, { family: Family }>["failure"];
+  };
+}[VerifyClassification["family"]];
+
+export type WebhookHandledEvent =
+  | {
+      kind: "method_not_allowed";
+      reason: "method_not_allowed";
+      durationMs: number;
+    }
+  | { kind: "config_failure"; durationMs: number; reason: ConfigReason }
+  | { kind: "body_read_failed"; reason: "body_read_failed"; durationMs: number }
+  | { kind: "unexpected"; reason: "unexpected"; durationMs: number }
+  | UnauthorizedHandled
+  | {
+      kind: "forwarded";
+      reason: "forwarded";
+      durationMs: number;
+      upstreamStatus: number;
+    }
+  | {
+      kind: "upstream_failure";
+      durationMs: number;
+      reason: "upstream_http_error";
+      upstreamStatus: number;
+    }
+  | {
+      kind: "upstream_failure";
+      durationMs: number;
+      reason: "upstream_fetch_failed";
+    };
+
 export type BridgeTelemetry = {
   /** False when `POSTHOG_PROJECT_KEY` is unset or client setup threw. */
   readonly enabled: boolean;
@@ -76,6 +115,11 @@ export type BridgeTelemetry = {
    * Adds only `source`. Privacy scrubbing still runs on the exception event.
    */
   captureException(error: unknown, source: ExceptionSource): void;
+  /**
+   * Queue one `webhook_handled` event. Never throws and does not flush.
+   * The route flushes once after this, including when an exception was also queued.
+   */
+  captureWebhookHandled(event: WebhookHandledEvent): void;
   /**
    * Send queued analytics events and log records. Never throws.
    * Use this before a serverless function returns. Does not disable the client.
@@ -94,6 +138,7 @@ type AnalyticsClient = {
     distinctId?: string,
     additionalProperties?: Record<string, unknown>,
   ) => void;
+  capture?: (event: EventMessage) => void;
   flush: () => Promise<void>;
   shutdown: (timeoutMs?: number) => Promise<void>;
 };
@@ -183,6 +228,17 @@ export function createBridgeTelemetry(
         // Telemetry must not change the HTTP status AppFolio sees.
       }
     },
+    captureWebhookHandled(event) {
+      try {
+        analytics.capture?.({
+          distinctId: POSTHOG_DISTINCT_ID,
+          event: WEBHOOK_HANDLED_EVENT,
+          properties: webhookHandledProperties(event),
+        });
+      } catch {
+        return undefined;
+      }
+    },
     flush() {
       return settleWithin(
         Promise.allSettled([analytics.flush(), logs.forceFlush()]),
@@ -201,6 +257,60 @@ export function createBridgeTelemetry(
   };
 }
 
+function webhookHandledProperties(
+  event: WebhookHandledEvent,
+): Record<string, string | number> {
+  switch (event.kind) {
+    case "method_not_allowed":
+    case "config_failure":
+    case "body_read_failed":
+    case "unexpected":
+      return {
+        kind: event.kind,
+        reason: event.reason,
+        durationMs: event.durationMs,
+      };
+    case "unauthorized":
+      return {
+        kind: event.kind,
+        reason: event.reason,
+        family: event.family,
+        durationMs: event.durationMs,
+      };
+    case "forwarded":
+      return {
+        kind: event.kind,
+        reason: event.reason,
+        durationMs: event.durationMs,
+        upstreamStatus: event.upstreamStatus,
+      };
+    case "upstream_failure":
+      switch (event.reason) {
+        case "upstream_fetch_failed":
+          return {
+            kind: event.kind,
+            reason: event.reason,
+            durationMs: event.durationMs,
+          };
+        case "upstream_http_error":
+          return {
+            kind: event.kind,
+            reason: event.reason,
+            durationMs: event.durationMs,
+            upstreamStatus: event.upstreamStatus,
+          };
+        default: {
+          const unexpected: never = event;
+          return unexpected;
+        }
+      }
+    default: {
+      const unexpected: never = event;
+      return unexpected;
+    }
+  }
+}
+
 function disabledTelemetry(
   environment: string,
   serviceVersion: string,
@@ -211,6 +321,9 @@ function disabledTelemetry(
     environment,
     serviceVersion,
     captureException() {
+      return undefined;
+    },
+    captureWebhookHandled() {
       return undefined;
     },
     flush: async () => undefined,
