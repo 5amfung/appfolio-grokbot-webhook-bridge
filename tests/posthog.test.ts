@@ -342,6 +342,8 @@ describe("createBridgeTelemetry", () => {
         reason: "signature_invalid",
         family: "bad_signature",
         durationMs: 8,
+        environment: DEFAULT_DEPLOYMENT_ENVIRONMENT,
+        serviceVersion: packageJson.version,
       },
     });
     expect(JSON.stringify(capture.mock.calls)).toContain("signature_invalid");
@@ -394,6 +396,46 @@ describe("createBridgeTelemetry", () => {
       },
     );
     expect(() => throwing.captureWebhookHandled(event)).not.toThrow();
+  });
+
+  it("stamps deployment environment and service version on webhook_handled", () => {
+    const capture = vi.fn();
+    const telemetry = createBridgeTelemetry(
+      {
+        POSTHOG_PROJECT_KEY: "phc_test",
+        VERCEL_ENV: "production",
+        VERCEL_GIT_COMMIT_SHA: "abc123",
+      },
+      {
+        createAnalyticsClient: () => ({
+          capture,
+          flush: async () => undefined,
+          shutdown: async () => undefined,
+        }),
+        startLogs: () => ({
+          forceFlush: async () => undefined,
+          shutdown: async () => undefined,
+        }),
+      },
+    );
+    telemetry.captureWebhookHandled({
+      kind: "forwarded",
+      reason: "forwarded",
+      durationMs: 3,
+      upstreamStatus: 204,
+    });
+    expect(capture).toHaveBeenCalledWith({
+      event: "webhook_handled",
+      distinctId: POSTHOG_DISTINCT_ID,
+      properties: {
+        kind: "forwarded",
+        reason: "forwarded",
+        durationMs: 3,
+        upstreamStatus: 204,
+        environment: "production",
+        serviceVersion: "abc123",
+      },
+    });
   });
 
   it("swallows flush and shutdown failures", async () => {

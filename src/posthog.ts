@@ -233,7 +233,11 @@ export function createBridgeTelemetry(
         analytics.capture?.({
           distinctId: POSTHOG_DISTINCT_ID,
           event: WEBHOOK_HANDLED_EVENT,
-          properties: webhookHandledProperties(event),
+          properties: {
+            ...webhookHandledProperties(event),
+            environment,
+            serviceVersion,
+          },
         });
       } catch {
         return undefined;
