@@ -17,8 +17,8 @@ why investigators: grok-4.7-high-fast
 why synthesizer: grok-4.7-high-fast
 reflect tooling: grok-4.7-high-fast
 reflect judgment, divergent, synthesizer: grok-4.7-high-fast
-arena runners: grok-4.7-high-fast, gemini-4-argon-high
-arena cross-judge pool: grok-4.7-high-fast, gemini-4-argon-high
+arena runners: grok-4.7-high-fast, gemini-4-argon-high, gpt-5.6-sol-high
+arena cross-judge pool: grok-4.7-high-fast, gemini-4-argon-high, gpt-5.6-sol-high
 swarm workers: grok-4.7-high-fast
-architect runners: grok-4.7-high-fast, gemini-4-argon-high
-interrogate reviewers: grok-4.7-high-fast, gemini-4-argon-high
+architect runners: grok-4.7-high-fast, gemini-4-argon-high, gpt-5.6-sol-high
+interrogate reviewers: grok-4.7-high-fast, gemini-4-argon-high, gpt-5.6-sol-high
