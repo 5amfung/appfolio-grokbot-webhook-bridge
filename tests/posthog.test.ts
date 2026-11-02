@@ -721,6 +721,7 @@ describe("createBridgeTelemetry", () => {
       expect(log.mock.calls.map((call) => call[0])).toEqual([]);
       const record = otlpLogRecord(post?.body ?? "");
       expect(record.scopeName).toBe(POSTHOG_SERVICE_NAME);
+      expect(record.scopeVersion).toBe(packageJson.version);
       expect(record.body).toBe("webhook_handled");
       expect(record.attributes).toEqual({
         kind: "forwarded",
@@ -840,6 +841,7 @@ async function startIngest(delayMs: number): Promise<{
 
 function otlpLogRecord(body: string): {
   scopeName: string;
+  scopeVersion: string;
   body: string;
   attributes: Record<string, string | number>;
   resource: Record<string, string>;
@@ -850,7 +852,7 @@ function otlpLogRecord(body: string): {
         attributes: Array<{ key: string; value: { stringValue?: string } }>;
       };
       scopeLogs: Array<{
-        scope?: { name?: string };
+        scope?: { name?: string; version?: string };
         logRecords: Array<{
           body?: { stringValue?: string };
           attributes?: Array<{
@@ -885,6 +887,7 @@ function otlpLogRecord(body: string): {
   }
   return {
     scopeName: scopeLogs.scope?.name ?? "",
+    scopeVersion: scopeLogs.scope?.version ?? "",
     body: record.body?.stringValue ?? "",
     attributes,
     resource,

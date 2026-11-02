@@ -234,7 +234,7 @@ export function createBridgeTelemetry(
         serviceVersion,
       };
       try {
-        documentedLogs.getLogger(POSTHOG_SERVICE_NAME).emit({
+        documentedLogs.getLogger(POSTHOG_SERVICE_NAME, PACKAGE_VERSION).emit({
           severityText: "info",
           body: WEBHOOK_HANDLED_EVENT,
           attributes: properties,
