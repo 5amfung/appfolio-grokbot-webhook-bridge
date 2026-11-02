@@ -342,6 +342,8 @@ describe("createBridgeTelemetry", () => {
         reason: "signature_invalid",
         family: "bad_signature",
         durationMs: 8,
+        environment: DEFAULT_DEPLOYMENT_ENVIRONMENT,
+        serviceVersion: packageJson.version,
       },
     });
     expect(JSON.stringify(capture.mock.calls)).toContain("signature_invalid");
@@ -396,35 +398,138 @@ describe("createBridgeTelemetry", () => {
     expect(() => throwing.captureWebhookHandled(event)).not.toThrow();
   });
 
+  it("stamps deployment environment and service version on webhook_handled", () => {
+    const capture = vi.fn();
+    const telemetry = createBridgeTelemetry(
+      {
+        POSTHOG_PROJECT_KEY: "phc_test",
+        VERCEL_ENV: "production",
+        VERCEL_GIT_COMMIT_SHA: "abc123",
+      },
+      {
+        createAnalyticsClient: () => ({
+          capture,
+          flush: async () => undefined,
+          shutdown: async () => undefined,
+        }),
+        startLogs: () => ({
+          forceFlush: async () => undefined,
+          shutdown: async () => undefined,
+        }),
+      },
+    );
+    telemetry.captureWebhookHandled({
+      kind: "forwarded",
+      reason: "forwarded",
+      durationMs: 3,
+      upstreamStatus: 204,
+    });
+    expect(capture).toHaveBeenCalledWith({
+      event: "webhook_handled",
+      distinctId: POSTHOG_DISTINCT_ID,
+      properties: {
+        kind: "forwarded",
+        reason: "forwarded",
+        durationMs: 3,
+        upstreamStatus: 204,
+        environment: "production",
+        serviceVersion: "abc123",
+      },
+    });
+    telemetry.captureWebhookHandled({
+      kind: "upstream_failure",
+      reason: "upstream_fetch_failed",
+      durationMs: 4,
+      failure: "dns",
+    });
+    expect(capture).toHaveBeenLastCalledWith({
+      event: "webhook_handled",
+      distinctId: POSTHOG_DISTINCT_ID,
+      properties: {
+        kind: "upstream_failure",
+        reason: "upstream_fetch_failed",
+        durationMs: 4,
+        failure: "dns",
+        environment: "production",
+        serviceVersion: "abc123",
+      },
+    });
+  });
+
   it("swallows flush and shutdown failures", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const telemetry = createBridgeTelemetry(
       { POSTHOG_PROJECT_KEY: "phc_test" },
       {
         createAnalyticsClient: () => ({
           flush: async () => {
-            throw new Error("posthog down");
+            throw new Error("posthog down https://us.i.posthog.com/batch");
           },
           shutdown: async () => {
-            throw new Error("posthog down");
+            throw new Error("posthog down https://us.i.posthog.com/batch");
           },
         }),
         startLogs: () => ({
           forceFlush: async () => {
-            throw new Error("logs down");
+            throw new Error("logs down https://us.i.posthog.com/i/v1/logs");
           },
           shutdown: async () => {
-            throw new Error("logs down");
+            throw new Error("logs down https://us.i.posthog.com/i/v1/logs");
           },
         }),
       },
     );
-    await expect(telemetry.flush()).resolves.toBeUndefined();
-    await expect(telemetry.shutdown()).resolves.toBeUndefined();
+    try {
+      await expect(telemetry.flush()).resolves.toBeUndefined();
+      expect(log.mock.calls.map((call) => call[0])).toEqual([
+        "telemetry_flush_failed analytics rejected",
+        "telemetry_flush_failed logs rejected",
+      ]);
+      expect(JSON.stringify(log.mock.calls)).not.toContain("posthog.com");
+      expect(JSON.stringify(log.mock.calls)).not.toContain("posthog down");
+      expect(JSON.stringify(log.mock.calls)).not.toContain("logs down");
+      await expect(telemetry.shutdown()).resolves.toBeUndefined();
+      expect(log).toHaveBeenCalledTimes(2);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it("writes a stdout line when flush times out and omits the error text", async () => {
+    vi.useFakeTimers();
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const telemetry = createBridgeTelemetry(
+      { POSTHOG_PROJECT_KEY: "phc_test" },
+      {
+        createAnalyticsClient: () => ({
+          flush: () => new Promise(() => undefined),
+          shutdown: async () => undefined,
+        }),
+        startLogs: () => ({
+          forceFlush: () => new Promise(() => undefined),
+          shutdown: async () => undefined,
+        }),
+      },
+    );
+    try {
+      const pending = telemetry.flush();
+      await vi.advanceTimersByTimeAsync(POSTHOG_FLUSH_TIMEOUT_MS);
+      await pending;
+      expect(log.mock.calls.map((call) => call[0])).toEqual([
+        "telemetry_flush_failed analytics timeout",
+        "telemetry_flush_failed logs timeout",
+      ]);
+      expect(JSON.stringify(log.mock.calls)).not.toContain("posthog.com");
+    } finally {
+      log.mockRestore();
+      vi.useRealTimers();
+    }
   });
 
   it("awaits the other pipeline when one flush or shutdown fails", async () => {
     let logsFlushed = false;
     let analyticsShutDown = false;
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const telemetry = createBridgeTelemetry(
       { POSTHOG_PROJECT_KEY: "phc_test" },
       {
@@ -455,10 +560,19 @@ describe("createBridgeTelemetry", () => {
       },
     );
 
-    await telemetry.flush();
-    expect(logsFlushed).toBe(true);
-    await telemetry.shutdown();
-    expect(analyticsShutDown).toBe(true);
+    try {
+      await telemetry.flush();
+      expect(logsFlushed).toBe(true);
+      expect(log.mock.calls.map((call) => call[0])).toEqual([
+        "telemetry_flush_failed analytics rejected",
+      ]);
+      expect(JSON.stringify(log.mock.calls)).not.toContain("posthog down");
+      await telemetry.shutdown();
+      expect(analyticsShutDown).toBe(true);
+      expect(log).toHaveBeenCalledTimes(1);
+    } finally {
+      log.mockRestore();
+    }
   });
 
   it("returns a no-op when client setup throws", async () => {

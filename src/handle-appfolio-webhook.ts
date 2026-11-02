@@ -1,11 +1,15 @@
 import type { AppfolioJwks, VerifyClassification } from "./verify-appfolio-jws.js";
 import { verifyAppfolioJws } from "./verify-appfolio-jws.js";
-import { forwardToGrokBot } from "./forward-to-grok-bot.js";
+import {
+  forwardToGrokBot,
+  type UpstreamFetchFailure,
+} from "./forward-to-grok-bot.js";
 
 export type HandlerOutcome =
   | { kind: "unauthorized"; reason: string; classification: VerifyClassification }
   | { kind: "forwarded"; upstreamStatus: number }
-  | { kind: "upstream_failure"; error: string; upstreamStatus?: number };
+  | { kind: "upstream_failure"; error: string; upstreamStatus: number }
+  | { kind: "upstream_failure"; error: string; failure: UpstreamFetchFailure };
 
 export type HandleDeps = {
   jwks: AppfolioJwks;
@@ -45,12 +49,16 @@ export async function handleAppfolioWebhook(
   if (forwarded.ok) {
     return { kind: "forwarded", upstreamStatus: forwarded.status };
   }
-  if (typeof forwarded.status === "number") {
+  if ("status" in forwarded) {
     return {
       kind: "upstream_failure",
       error: forwarded.error,
       upstreamStatus: forwarded.status,
     };
   }
-  return { kind: "upstream_failure", error: forwarded.error };
+  return {
+    kind: "upstream_failure",
+    error: forwarded.error,
+    failure: forwarded.failure,
+  };
 }
