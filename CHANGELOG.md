@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/compare/v0.3.1...v0.3.2) (2026-11-02)
+
+
+### Bug Fixes
+
+* **posthog:** emit a webhook log and finish the export ([#20](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/issues/20)) ([16f28f0](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/commit/16f28f0e07e5cc02395e8e0b07ae7156e085d8c8))
+
 ## [0.3.1](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/compare/v0.3.0...v0.3.1) (2026-11-02)
 
 
