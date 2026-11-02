@@ -30,7 +30,7 @@ Config (from env, parsed once at cold start):
 1. `src/verify-appfolio-jws.ts` — pure. Inputs: rawBody: Uint8Array, signatureHeader: string, jwks. Verify detached JWS PS256 against AppFolio JWKS. No HTTP framework imports.
 2. `src/forward-to-grok-bot.ts` — pure-ish. POST body + Bearer. Returns status.
 3. `api/webhooks/appfolio.ts` (or App Router equivalent) — boundary. Read raw body. Call verify. On fail 401. On pass forward. Map to 200 / 502.
-4. `api/health.ts` — GET 200 ok.
+4. `api/health.ts` — GET `200 { ok: true }` when config loads. GET `500 { ok: false, reason }` with a config token when it does not.
 
 ## Constraints
 

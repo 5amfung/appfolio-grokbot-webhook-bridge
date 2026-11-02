@@ -10,7 +10,7 @@ Deploy target: Vercel. Production updates only when a release merges. See [Relea
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| `GET` | `/api/health` | Liveness → `200 { ok: true }` |
+| `GET` | `/api/health` | `200 { ok: true }` when webhook config loads. `500 { ok: false, reason }` when it does not. |
 | `POST` | `/api/webhooks/appfolio` | Verify AppFolio JWS, forward raw body to Grok Bot |
 
 ## Environment (Vercel only — never commit secrets)
