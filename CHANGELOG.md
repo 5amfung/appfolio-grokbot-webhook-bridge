@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.0](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/compare/v0.2.1...v0.3.0) (2026-11-02)
+
+
+### Features
+
+* **posthog:** capture handled webhook exceptions ([#13](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/issues/13)) ([1d0485d](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/commit/1d0485d070fda52aa5787f6f303c0e7cfb5a83d6))
+* **webhook:** make webhook telemetry pageable ([#17](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/issues/17)) ([b727d68](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/commit/b727d689f18ae26cdb71b601538044794903a935))
+* **webhook:** record webhook_handled with a closed reason ([#16](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/issues/16)) ([cae5867](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/commit/cae58671ca8d17c4ed0f95d98faa3381948504dd))
+
+
+### Bug Fixes
+
+* add GPT Sol to pstack review panels ([#15](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/issues/15)) ([0915975](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/commit/091597573fe7652adb04ba677764d270a33b038c))
+
 ## [0.2.1](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/compare/v0.2.0...v0.2.1) (2026-10-31)
 
 
