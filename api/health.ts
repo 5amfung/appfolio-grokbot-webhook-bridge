@@ -1,11 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { classifyConfigError, loadConfig } from "../src/config.js";
 
-/**
- * GET /api/health
- * 200 { ok: true } when webhook config loads.
- * 500 { ok: false, reason } when it does not. The reason is a config token.
- */
 export default function handler(
   _req: VercelRequest,
   res: VercelResponse,

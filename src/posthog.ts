@@ -4,11 +4,7 @@
  * Call `createBridgeTelemetry()` once per isolate. When `POSTHOG_PROJECT_KEY`
  * is unset the result is a complete no-op: no client, no OpenTelemetry
  * provider, no network. Await `flush()` before a serverless invocation
- * returns, and `shutdown()` only when the process is exiting. Both are
- * time-bounded and never throw, so telemetry cannot change the HTTP status
- * or hang the response to AppFolio. When a flush client rejects or the wait
- * ends, the process writes `telemetry_flush_failed <client> <rejected|timeout>`
- * to stdout and omits the error text.
+ * returns, and `shutdown()` only when the process is exiting.
  *
  * Logs follow the Node.js OpenTelemetry setup (not the browser SDK):
  * https://posthog.com/docs/logs/installation/nodejs
