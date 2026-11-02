@@ -23,6 +23,10 @@ const TIMEOUT_CODES = new Set([
 
 const DNS_CODES = new Set(["ENOTFOUND", "EAI_AGAIN"]);
 
+function responseStatus(res: { readonly status?: number }): number {
+  return typeof res.status === "number" ? res.status : 0;
+}
+
 /**
  * POST raw body bytes to Grok Bot with Bearer auth.
  * Does not parse or re-stringify the body.
@@ -43,13 +47,14 @@ export async function forwardToGrokBot(
       body: rawBody,
     });
 
-    if (res.status >= 200 && res.status < 300) {
-      return { ok: true, status: res.status };
+    const status = responseStatus(res);
+    if (status >= 200 && status < 300) {
+      return { ok: true, status };
     }
     return {
       ok: false,
-      status: res.status,
-      error: `upstream returned ${res.status}`,
+      status,
+      error: `upstream returned ${status}`,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : "upstream fetch failed";
