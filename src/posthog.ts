@@ -414,7 +414,7 @@ function defaultCreateAnalytics(
   apiKey: string,
   options: PostHogOptions,
 ): AnalyticsClient {
-  return new PostHog(apiKey, options);
+  return new PostHog(apiKey, options) as unknown as AnalyticsClient;
 }
 
 function startLogsPipeline(
@@ -482,7 +482,7 @@ function defaultCreateLogExporter(options: LogExporterOptions): LogRecordExporte
     url: options.url,
     headers: options.headers,
     timeoutMillis: options.timeoutMillis,
-  });
+  }) as LogRecordExporter;
 }
 
 /**
