@@ -4,9 +4,11 @@
  * Call `createBridgeTelemetry()` once per isolate. When `POSTHOG_PROJECT_KEY`
  * is unset the result is a complete no-op: no client, no OpenTelemetry
  * provider, no network. Await `flush()` before a serverless invocation
- * returns, and `shutdown()` only when the process is exiting. Both swallow
- * failures and are time-bounded so telemetry cannot change the HTTP status
- * or hang the response to AppFolio.
+ * returns, and `shutdown()` only when the process is exiting. Both are
+ * time-bounded and never throw, so telemetry cannot change the HTTP status
+ * or hang the response to AppFolio. When a flush client rejects or the wait
+ * ends, the process writes `telemetry_flush_failed <client> <rejected|timeout>`
+ * to stdout and omits the error text.
  *
  * Logs follow the Node.js OpenTelemetry setup (not the browser SDK):
  * https://posthog.com/docs/logs/installation/nodejs
@@ -246,8 +248,11 @@ export function createBridgeTelemetry(
       }
     },
     flush() {
-      return settleWithin(
-        Promise.allSettled([analytics.flush(), logs.forceFlush()]),
+      return settleNamed(
+        [
+          ["analytics", analytics.flush()],
+          ["logs", logs.forceFlush()],
+        ],
         POSTHOG_FLUSH_TIMEOUT_MS,
       );
     },
@@ -579,6 +584,45 @@ function redactString(value: string): string {
     .replace(PROJECT_TOKEN_PATTERN, "[redacted]")
     .replace(DETACHED_JWS_PATTERN, "[redacted]")
     .replace(URL_PATTERN, "[redacted-url]");
+}
+
+type FlushClient = "analytics" | "logs";
+
+function settleNamed(
+  tasks: Array<[FlushClient, Promise<unknown>]>,
+  timeoutMs: number,
+): Promise<void> {
+  return Promise.all(
+    tasks.map(async ([client, task]) => {
+      const outcome = await settleOne(task, timeoutMs);
+      if (outcome === "ok") return;
+      console.log(`telemetry_flush_failed ${client} ${outcome}`);
+    }),
+  ).then(() => undefined);
+}
+
+function settleOne(
+  task: Promise<unknown>,
+  timeoutMs: number,
+): Promise<"ok" | "rejected" | "timeout"> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      resolve("timeout");
+    }, timeoutMs);
+    const finish = (outcome: "ok" | "rejected") => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(outcome);
+    };
+    task.then(
+      () => finish("ok"),
+      () => finish("rejected"),
+    );
+  });
 }
 
 function settleWithin(task: Promise<unknown>, timeoutMs: number): Promise<void> {

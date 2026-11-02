@@ -457,34 +457,79 @@ describe("createBridgeTelemetry", () => {
   });
 
   it("swallows flush and shutdown failures", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const telemetry = createBridgeTelemetry(
       { POSTHOG_PROJECT_KEY: "phc_test" },
       {
         createAnalyticsClient: () => ({
           flush: async () => {
-            throw new Error("posthog down");
+            throw new Error("posthog down https://us.i.posthog.com/batch");
           },
           shutdown: async () => {
-            throw new Error("posthog down");
+            throw new Error("posthog down https://us.i.posthog.com/batch");
           },
         }),
         startLogs: () => ({
           forceFlush: async () => {
-            throw new Error("logs down");
+            throw new Error("logs down https://us.i.posthog.com/i/v1/logs");
           },
           shutdown: async () => {
-            throw new Error("logs down");
+            throw new Error("logs down https://us.i.posthog.com/i/v1/logs");
           },
         }),
       },
     );
-    await expect(telemetry.flush()).resolves.toBeUndefined();
-    await expect(telemetry.shutdown()).resolves.toBeUndefined();
+    try {
+      await expect(telemetry.flush()).resolves.toBeUndefined();
+      expect(log.mock.calls.map((call) => call[0])).toEqual([
+        "telemetry_flush_failed analytics rejected",
+        "telemetry_flush_failed logs rejected",
+      ]);
+      expect(JSON.stringify(log.mock.calls)).not.toContain("posthog.com");
+      expect(JSON.stringify(log.mock.calls)).not.toContain("posthog down");
+      expect(JSON.stringify(log.mock.calls)).not.toContain("logs down");
+      await expect(telemetry.shutdown()).resolves.toBeUndefined();
+      expect(log).toHaveBeenCalledTimes(2);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it("writes a stdout line when flush times out and omits the error text", async () => {
+    vi.useFakeTimers();
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const telemetry = createBridgeTelemetry(
+      { POSTHOG_PROJECT_KEY: "phc_test" },
+      {
+        createAnalyticsClient: () => ({
+          flush: () => new Promise(() => undefined),
+          shutdown: async () => undefined,
+        }),
+        startLogs: () => ({
+          forceFlush: () => new Promise(() => undefined),
+          shutdown: async () => undefined,
+        }),
+      },
+    );
+    try {
+      const pending = telemetry.flush();
+      await vi.advanceTimersByTimeAsync(POSTHOG_FLUSH_TIMEOUT_MS);
+      await pending;
+      expect(log.mock.calls.map((call) => call[0])).toEqual([
+        "telemetry_flush_failed analytics timeout",
+        "telemetry_flush_failed logs timeout",
+      ]);
+      expect(JSON.stringify(log.mock.calls)).not.toContain("posthog.com");
+    } finally {
+      log.mockRestore();
+      vi.useRealTimers();
+    }
   });
 
   it("awaits the other pipeline when one flush or shutdown fails", async () => {
     let logsFlushed = false;
     let analyticsShutDown = false;
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const telemetry = createBridgeTelemetry(
       { POSTHOG_PROJECT_KEY: "phc_test" },
       {
@@ -515,10 +560,19 @@ describe("createBridgeTelemetry", () => {
       },
     );
 
-    await telemetry.flush();
-    expect(logsFlushed).toBe(true);
-    await telemetry.shutdown();
-    expect(analyticsShutDown).toBe(true);
+    try {
+      await telemetry.flush();
+      expect(logsFlushed).toBe(true);
+      expect(log.mock.calls.map((call) => call[0])).toEqual([
+        "telemetry_flush_failed analytics rejected",
+      ]);
+      expect(JSON.stringify(log.mock.calls)).not.toContain("posthog down");
+      await telemetry.shutdown();
+      expect(analyticsShutDown).toBe(true);
+      expect(log).toHaveBeenCalledTimes(1);
+    } finally {
+      log.mockRestore();
+    }
   });
 
   it("returns a no-op when client setup throws", async () => {
