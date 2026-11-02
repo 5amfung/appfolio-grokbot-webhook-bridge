@@ -29,11 +29,11 @@ describe("forwardToGrokBot", () => {
     ) as unknown as typeof fetch;
 
     const result = await forwardToGrokBot(body, url, token, fetchImpl);
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.status).toBe(503);
-      expect(result.error).toContain("503");
-    }
+    expect(result).toEqual({
+      ok: false,
+      status: 503,
+      error: "upstream returned 503",
+    });
   });
 
   it("returns failure when fetch throws", async () => {
@@ -42,6 +42,48 @@ describe("forwardToGrokBot", () => {
     }) as unknown as typeof fetch;
 
     const result = await forwardToGrokBot(body, url, token, fetchImpl);
-    expect(result).toEqual({ ok: false, error: "network down" });
+    expect(result).toEqual({
+      ok: false,
+      error: "network down",
+      failure: "other",
+    });
+  });
+
+  it.each([
+    ["ETIMEDOUT", "timeout"],
+    ["UND_ERR_CONNECT_TIMEOUT", "timeout"],
+    ["ENOTFOUND", "dns"],
+    ["EAI_AGAIN", "dns"],
+    ["ECONNRESET", "connection_reset"],
+    ["ECONNREFUSED", "connection_refused"],
+    ["EHOSTUNREACH", "other"],
+  ] as const)("classifies fetch cause %s as %s", async (code, failure) => {
+    const cause = new Error(`connect ${code} https://bot.example/hook`);
+    (cause as Error & { code: string }).code = code;
+    const thrown = new TypeError("fetch failed");
+    (thrown as Error & { cause: unknown }).cause = cause;
+    const fetchImpl = vi.fn(async () => {
+      throw thrown;
+    }) as unknown as typeof fetch;
+
+    const result = await forwardToGrokBot(body, url, token, fetchImpl);
+    expect(result).toEqual({ ok: false, error: "fetch failed", failure });
+    expect(JSON.stringify(result)).not.toContain("bot.example");
+    expect(JSON.stringify(result)).not.toContain(code);
+  });
+
+  it("classifies TimeoutError by name when no code is set", async () => {
+    const thrown = new Error("the operation timed out");
+    thrown.name = "TimeoutError";
+    const fetchImpl = vi.fn(async () => {
+      throw thrown;
+    }) as unknown as typeof fetch;
+
+    const result = await forwardToGrokBot(body, url, token, fetchImpl);
+    expect(result).toEqual({
+      ok: false,
+      error: "the operation timed out",
+      failure: "timeout",
+    });
   });
 });

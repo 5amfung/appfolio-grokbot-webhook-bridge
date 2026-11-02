@@ -37,6 +37,7 @@ import { NodeSDK } from "@opentelemetry/sdk-node";
 import { PostHog, type EventMessage, type PostHogOptions } from "posthog-node";
 import packageJson from "../package.json" with { type: "json" };
 import type { ConfigReason } from "./config.js";
+import type { UpstreamFetchFailure } from "./forward-to-grok-bot.js";
 import type { VerifyClassification } from "./verify-appfolio-jws.js";
 
 /** Fixed, non-personal distinct id. Do not replace this with a tenant or user id. */
@@ -102,6 +103,7 @@ export type WebhookHandledEvent =
       kind: "upstream_failure";
       durationMs: number;
       reason: "upstream_fetch_failed";
+      failure: UpstreamFetchFailure;
     };
 
 export type BridgeTelemetry = {
@@ -295,6 +297,7 @@ function webhookHandledProperties(
             kind: event.kind,
             reason: event.reason,
             durationMs: event.durationMs,
+            failure: event.failure,
           };
         case "upstream_http_error":
           return {

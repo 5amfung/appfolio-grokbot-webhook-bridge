@@ -117,6 +117,7 @@ describe("handleAppfolioWebhook (route logic, mocked upstream)", () => {
     expect(outcome).toEqual({
       kind: "upstream_failure",
       error: "network down",
+      failure: "other",
     });
   });
 
@@ -384,6 +385,47 @@ describe("handleWebhookRequest", () => {
     });
     expect(JSON.stringify(seen.captureWebhookHandled.mock.calls)).not.toContain(
       "upstream returned 500",
+    );
+  });
+
+  it("returns 502 and records a fetch failure token when the forward throws", async () => {
+    const { detached, jwk } = await signedRequest(rawBody, "route-good");
+    const jwksUrl = stubBridgeEnv();
+    const cause = new Error("connect ECONNREFUSED https://bot.example/hook");
+    (cause as Error & { code: string }).code = "ECONNREFUSED";
+    const thrown = new TypeError("fetch failed");
+    (thrown as Error & { cause: unknown }).cause = cause;
+    const fetchImpl = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === jwksUrl) return Response.json({ keys: [jwk] });
+      throw thrown;
+    });
+    const http = fakeResponse();
+    const seen = fakeTelemetry();
+    try {
+      await handleWebhookRequest(
+        fakeRequest({ method: "POST", body: rawBody, signature: detached }),
+        http.res,
+        seen.telemetry,
+      );
+    } finally {
+      fetchImpl.mockRestore();
+      vi.unstubAllEnvs();
+    }
+
+    expect(http.state.statusCode).toBe(502);
+    expect(http.state.body).toEqual({ error: "fetch failed" });
+    expect(seen.captureException).not.toHaveBeenCalled();
+    expectCaptured(seen.captureWebhookHandled, seen.flush, {
+      kind: "upstream_failure",
+      reason: "upstream_fetch_failed",
+      failure: "connection_refused",
+    });
+    expect(JSON.stringify(seen.captureWebhookHandled.mock.calls)).not.toContain(
+      "bot.example",
+    );
+    expect(JSON.stringify(seen.captureWebhookHandled.mock.calls)).not.toContain(
+      "ECONNREFUSED",
     );
   });
 

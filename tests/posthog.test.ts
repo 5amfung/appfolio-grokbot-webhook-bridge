@@ -436,6 +436,24 @@ describe("createBridgeTelemetry", () => {
         serviceVersion: "abc123",
       },
     });
+    telemetry.captureWebhookHandled({
+      kind: "upstream_failure",
+      reason: "upstream_fetch_failed",
+      durationMs: 4,
+      failure: "dns",
+    });
+    expect(capture).toHaveBeenLastCalledWith({
+      event: "webhook_handled",
+      distinctId: POSTHOG_DISTINCT_ID,
+      properties: {
+        kind: "upstream_failure",
+        reason: "upstream_fetch_failed",
+        durationMs: 4,
+        failure: "dns",
+        environment: "production",
+        serviceVersion: "abc123",
+      },
+    });
   });
 
   it("swallows flush and shutdown failures", async () => {

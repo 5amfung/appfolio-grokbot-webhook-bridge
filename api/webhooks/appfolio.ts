@@ -5,6 +5,7 @@ import {
   loadConfig,
   type ConfigReason,
 } from "../../src/config.js";
+import type { UpstreamFetchFailure } from "../../src/forward-to-grok-bot.js";
 import { handleAppfolioWebhook } from "../../src/handle-appfolio-webhook.js";
 import {
   createBridgeTelemetry,
@@ -40,7 +41,8 @@ type PendingWebhook =
   | { kind: "unexpected" }
   | { kind: "unauthorized"; classification: VerifyClassification }
   | { kind: "forwarded"; upstreamStatus: number }
-  | { kind: "upstream_failure"; upstreamStatus?: number };
+  | { kind: "upstream_failure"; upstreamStatus: number }
+  | { kind: "upstream_failure"; failure: UpstreamFetchFailure };
 
 function bridgeTelemetry(): BridgeTelemetry {
   telemetry ??= createBridgeTelemetry();
@@ -133,12 +135,12 @@ export async function handleWebhookRequest(
         return;
       case "upstream_failure":
         pending =
-          typeof outcome.upstreamStatus === "number"
+          "upstreamStatus" in outcome
             ? {
                 kind: "upstream_failure",
                 upstreamStatus: outcome.upstreamStatus,
               }
-            : { kind: "upstream_failure" };
+            : { kind: "upstream_failure", failure: outcome.failure };
         res.status(502).json({ error: outcome.error });
         return;
       default: {
@@ -189,7 +191,7 @@ function toHandledEvent(
         upstreamStatus: pending.upstreamStatus,
       };
     case "upstream_failure":
-      if (typeof pending.upstreamStatus === "number") {
+      if ("upstreamStatus" in pending) {
         return {
           kind: "upstream_failure",
           reason: "upstream_http_error",
@@ -201,6 +203,7 @@ function toHandledEvent(
         kind: "upstream_failure",
         reason: "upstream_fetch_failed",
         durationMs,
+        failure: pending.failure,
       };
     default: {
       const unexpected: never = pending;

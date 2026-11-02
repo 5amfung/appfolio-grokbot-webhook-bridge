@@ -17,7 +17,8 @@ Handler outcome (discriminated):
 
 - { kind: "unauthorized"; reason: string; classification: { family, failure } }
 - { kind: "forwarded"; upstreamStatus: number }
-- { kind: "upstream_failure"; error: string; upstreamStatus?: number }
+- { kind: "upstream_failure"; error: string; upstreamStatus: number }
+- { kind: "upstream_failure"; error: string; failure: "timeout" | "dns" | "connection_reset" | "connection_refused" | "other" }
 
 Config (from env, parsed once at cold start):
 
