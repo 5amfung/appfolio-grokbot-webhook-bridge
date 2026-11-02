@@ -139,7 +139,6 @@ export async function handleWebhookRequest(
                 upstreamStatus: outcome.upstreamStatus,
               }
             : { kind: "upstream_failure" };
-        telemetry.captureException(new Error(outcome.error), "upstream");
         res.status(502).json({ error: outcome.error });
         return;
       default: {

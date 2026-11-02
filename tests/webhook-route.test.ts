@@ -376,11 +376,7 @@ describe("handleWebhookRequest", () => {
 
     expect(http.state.statusCode).toBe(502);
     expect(http.state.body).toEqual({ error: "upstream returned 500" });
-    expect(seen.captureException).toHaveBeenCalledOnce();
-    expect(seen.captureException.mock.calls[0]?.[1]).toBe("upstream");
-    expect(seen.captureException.mock.calls[0]?.[0]).toEqual(
-      new Error("upstream returned 500"),
-    );
+    expect(seen.captureException).not.toHaveBeenCalled();
     expectCaptured(seen.captureWebhookHandled, seen.flush, {
       kind: "upstream_failure",
       reason: "upstream_http_error",
