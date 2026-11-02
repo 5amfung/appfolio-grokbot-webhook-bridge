@@ -48,7 +48,6 @@ export const DEFAULT_POSTHOG_HOST = "https://us.i.posthog.com";
 
 export const DEFAULT_DEPLOYMENT_ENVIRONMENT = "development";
 
-/** Same budget as posthog-node's default request timeout. */
 export const POSTHOG_FLUSH_TIMEOUT_MS = 10_000;
 
 const PACKAGE_VERSION = packageJson.version.trim() || "0.0.0";
@@ -117,7 +116,7 @@ export type BridgeTelemetry = {
   captureException(error: unknown, source: ExceptionSource): void;
   /**
    * Queue one `webhook_handled` analytics event and one log record.
-   * Never throws and does not flush. The route flushes once after this.
+   * Never throws and does not flush.
    */
   captureWebhookHandled(event: WebhookHandledEvent): void;
   /**
@@ -241,7 +240,6 @@ export function createBridgeTelemetry(
           attributes: properties,
         });
       } catch {
-        // A logger failure must not skip the analytics event.
       }
       try {
         analytics.capture?.({
