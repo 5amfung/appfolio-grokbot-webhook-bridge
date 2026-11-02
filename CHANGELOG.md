@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/compare/v0.3.0...v0.3.1) (2026-11-02)
+
+
+### Bug Fixes
+
+* satisfy the Vercel node builder typecheck ([#18](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/issues/18)) ([d38181c](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/commit/d38181c8b99034db20d846d520e4f25d0128af34))
+
 ## [0.3.0](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/compare/v0.2.1...v0.3.0) (2026-11-02)
 
 
