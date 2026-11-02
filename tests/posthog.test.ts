@@ -1,3 +1,5 @@
+import { createServer } from "node:http";
+import { gunzipSync } from "node:zlib";
 import { logs } from "@opentelemetry/api-logs";
 import { ExportResultCode } from "@opentelemetry/core";
 import type { LogRecordExporter, ReadableLogRecord } from "@opentelemetry/sdk-logs";
@@ -28,6 +30,12 @@ afterEach(async () => {
 function track(telemetry: BridgeTelemetry): BridgeTelemetry {
   started.push(telemetry);
   return telemetry;
+}
+
+async function stop(telemetry: BridgeTelemetry): Promise<void> {
+  const index = started.lastIndexOf(telemetry);
+  if (index >= 0) started.splice(index, 1);
+  await telemetry.shutdown();
 }
 
 describe("createBridgeTelemetry", () => {
@@ -683,4 +691,202 @@ describe("createBridgeTelemetry", () => {
       fetchSpy.mockRestore();
     }
   });
+
+  it("posts one scrubbed webhook log from captureWebhookHandled", async () => {
+    const tenantPayload = '{"tenant":"AdaTenant991","address":"1 Main St"}';
+    const ingest = await startIngest(0);
+    const consoleLog = console.log;
+    const telemetry = track(
+      createBridgeTelemetry({
+        POSTHOG_PROJECT_KEY: "phc_test_project",
+        POSTHOG_HOST: ingest.origin,
+        VERCEL_ENV: "production",
+        VERCEL_GIT_COMMIT_SHA: "deadbeef",
+      }),
+    );
+    expect(console.log).toBe(consoleLog);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      telemetry.captureWebhookHandled({
+        kind: "forwarded",
+        reason: "forwarded",
+        durationMs: 12,
+        upstreamStatus: 200,
+      });
+      await telemetry.flush();
+      const posts = ingest.seen.filter((entry) => entry.url === "/i/v1/logs");
+      expect(posts).toHaveLength(1);
+      const post = posts[0];
+      expect(post?.responded).toBe(true);
+      expect(log.mock.calls.map((call) => call[0])).toEqual([]);
+      const record = otlpLogRecord(post?.body ?? "");
+      expect(record.scopeName).toBe(POSTHOG_SERVICE_NAME);
+      expect(record.body).toBe("webhook_handled");
+      expect(record.attributes).toEqual({
+        kind: "forwarded",
+        reason: "forwarded",
+        durationMs: 12,
+        upstreamStatus: 200,
+        environment: "production",
+        serviceVersion: "deadbeef",
+      });
+      expect(record.resource).toMatchObject({
+        "service.name": POSTHOG_SERVICE_NAME,
+        "service.version": "deadbeef",
+        "deployment.environment": "production",
+      });
+      expect(post?.body).not.toContain(tenantPayload);
+      expect(post?.body).not.toContain("AdaTenant991");
+      expect(post?.body).not.toContain("phc_");
+      expect(post?.body).not.toContain("Bearer");
+      expect(post?.body).not.toContain("authorization");
+    } finally {
+      log.mockRestore();
+      await stop(telemetry);
+      await ingest.close();
+    }
+  });
+
+  it("finishes a slow logs export before flush returns", async () => {
+    const ingest = await startIngest(1_500);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const telemetry = track(
+      createBridgeTelemetry({
+        POSTHOG_PROJECT_KEY: "phc_test_project",
+        POSTHOG_HOST: ingest.origin,
+        VERCEL_ENV: "production",
+        VERCEL_GIT_COMMIT_SHA: "deadbeef",
+      }),
+    );
+    try {
+      telemetry.captureWebhookHandled({
+        kind: "forwarded",
+        reason: "forwarded",
+        durationMs: 12,
+        upstreamStatus: 200,
+      });
+      await telemetry.flush();
+      const posts = ingest.seen.filter((entry) => entry.url === "/i/v1/logs");
+      expect(posts).toHaveLength(1);
+      expect(posts[0]?.responded).toBe(true);
+      expect(posts[0]?.socketDestroyedBeforeResponse).toBe(false);
+      expect(log.mock.calls.map((call) => call[0])).toEqual([]);
+      expect(otlpLogRecord(posts[0]?.body ?? "").attributes).toMatchObject({
+        kind: "forwarded",
+        environment: "production",
+        serviceVersion: "deadbeef",
+      });
+    } finally {
+      log.mockRestore();
+      await stop(telemetry);
+      await ingest.close();
+    }
+  }, 20_000);
 });
+
+type IngestRequest = {
+  url: string;
+  body: string;
+  responded: boolean;
+  socketDestroyedBeforeResponse: boolean;
+};
+
+async function startIngest(delayMs: number): Promise<{
+  origin: string;
+  seen: IngestRequest[];
+  close: () => Promise<void>;
+}> {
+  const seen: IngestRequest[] = [];
+  const server = createServer((req, res) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer) => chunks.push(chunk));
+    req.on("end", () => {
+      const raw = Buffer.concat(chunks);
+      const encoding = req.headers["content-encoding"];
+      const body =
+        encoding === "gzip"
+          ? gunzipSync(raw).toString("utf8")
+          : raw.toString("utf8");
+      const entry: IngestRequest = {
+        url: req.url ?? "",
+        body,
+        responded: false,
+        socketDestroyedBeforeResponse: false,
+      };
+      seen.push(entry);
+      setTimeout(() => {
+        entry.socketDestroyedBeforeResponse = req.socket.destroyed;
+        if (req.socket.destroyed || res.writableEnded) return;
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end("{}");
+        entry.responded = true;
+      }, delayMs);
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (address == null || typeof address === "string") {
+    throw new Error("expected a tcp port");
+  }
+  return {
+    origin: `http://127.0.0.1:${address.port}`,
+    seen,
+    close: () =>
+      new Promise((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      }),
+  };
+}
+
+function otlpLogRecord(body: string): {
+  scopeName: string;
+  body: string;
+  attributes: Record<string, string | number>;
+  resource: Record<string, string>;
+} {
+  const parsed = JSON.parse(body) as {
+    resourceLogs: Array<{
+      resource: {
+        attributes: Array<{ key: string; value: { stringValue?: string } }>;
+      };
+      scopeLogs: Array<{
+        scope?: { name?: string };
+        logRecords: Array<{
+          body?: { stringValue?: string };
+          attributes?: Array<{
+            key: string;
+            value: { stringValue?: string; intValue?: number | string };
+          }>;
+        }>;
+      }>;
+    }>;
+  };
+  const resourceLogs = parsed.resourceLogs[0];
+  const scopeLogs = resourceLogs?.scopeLogs[0];
+  const record = scopeLogs?.logRecords[0];
+  if (!resourceLogs || !scopeLogs || !record) {
+    throw new Error("expected one OTLP log record");
+  }
+  const attributes: Record<string, string | number> = {};
+  for (const attribute of record.attributes ?? []) {
+    if (attribute.value.stringValue !== undefined) {
+      attributes[attribute.key] = attribute.value.stringValue;
+      continue;
+    }
+    if (attribute.value.intValue !== undefined) {
+      attributes[attribute.key] = Number(attribute.value.intValue);
+    }
+  }
+  const resource: Record<string, string> = {};
+  for (const attribute of resourceLogs.resource.attributes) {
+    if (attribute.value.stringValue !== undefined) {
+      resource[attribute.key] = attribute.value.stringValue;
+    }
+  }
+  return {
+    scopeName: scopeLogs.scope?.name ?? "",
+    body: record.body?.stringValue ?? "",
+    attributes,
+    resource,
+  };
+}
