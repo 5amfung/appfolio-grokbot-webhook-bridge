@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { waitUntil } from "@vercel/functions";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import {
   CompactSign,
@@ -10,6 +11,12 @@ import {
 } from "jose";
 import { handleWebhookRequest } from "../api/webhooks/appfolio.js";
 import { handleAppfolioWebhook } from "../src/handle-appfolio-webhook.js";
+
+vi.mock("@vercel/functions", () => ({ waitUntil: vi.fn() }));
+
+beforeEach(() => {
+  vi.mocked(waitUntil).mockClear();
+});
 
 async function signDetached(rawBody: Uint8Array) {
   const { publicKey, privateKey } = await generateKeyPair("PS256", {
@@ -189,7 +196,7 @@ describe("handleWebhookRequest", () => {
   function fakeTelemetry() {
     const captureWebhookHandled = vi.fn();
     const captureException = vi.fn();
-    const flush = vi.fn(async () => undefined);
+    const flush = vi.fn<() => Promise<void>>(async () => undefined);
     return {
       captureWebhookHandled,
       captureException,
@@ -236,6 +243,7 @@ describe("handleWebhookRequest", () => {
   ) {
     expect(captured).toHaveBeenCalledOnce();
     expect(flush).toHaveBeenCalledOnce();
+    expect(waitUntil).toHaveBeenCalledExactlyOnceWith(flush.mock.results[0]?.value);
     expect(captured.mock.invocationCallOrder[0]).toBeLessThan(
       flush.mock.invocationCallOrder[0],
     );
@@ -497,6 +505,38 @@ describe("handleWebhookRequest", () => {
       kind: "method_not_allowed",
       reason: "method_not_allowed",
     });
+  });
+
+  it("returns after the response while waitUntil holds the real flush promise", async () => {
+    const http = fakeResponse();
+    const seen = fakeTelemetry();
+    let finishFlush!: () => void;
+    const pendingFlush = new Promise<void>((resolve) => {
+      finishFlush = resolve;
+    });
+    seen.flush.mockImplementation(() => {
+      expect(http.state.headersSent).toBe(true);
+      return pendingFlush;
+    });
+    let handlerReturned = false;
+    const request = handleWebhookRequest(
+      fakeRequest({ method: "GET" }),
+      http.res,
+      seen.telemetry,
+    ).then(() => {
+      handlerReturned = true;
+    });
+    try {
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(handlerReturned).toBe(true);
+      expect(http.state.statusCode).toBe(405);
+      expect(waitUntil).toHaveBeenCalledExactlyOnceWith(pendingFlush);
+    } finally {
+      finishFlush();
+      await request;
+      await pendingFlush;
+    }
   });
 
   it("returns 500 when the body cannot be read and records body_read_failed", async () => {

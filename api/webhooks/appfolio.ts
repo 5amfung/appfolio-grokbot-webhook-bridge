@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { waitUntil } from "@vercel/functions";
 import { createRemoteJWKSet } from "jose";
 import {
   classifyConfigError,
@@ -155,7 +156,7 @@ export async function handleWebhookRequest(
     }
   } finally {
     telemetry.captureWebhookHandled(toHandledEvent(pending, started));
-    await telemetry.flush();
+    waitUntil(telemetry.flush());
   }
 }
 
