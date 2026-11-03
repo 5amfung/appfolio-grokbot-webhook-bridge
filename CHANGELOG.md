@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/compare/v0.4.0...v0.5.0) (2026-11-03)
+
+
+### Features
+
+* log webhook payload properties and outbound duration ([#27](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/issues/27)) ([9f39ed8](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/commit/9f39ed8770f48b925e583894b4565edb9d38900b))
+
+
+### Bug Fixes
+
+* **tests:** remove redundant console evidence output ([#29](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/issues/29)) ([74fda6f](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/commit/74fda6fba3bd57f3948b50535971c0908ac13de6))
+
 ## [0.4.0](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/compare/v0.3.2...v0.4.0) (2026-11-03)
 
 
