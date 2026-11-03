@@ -2,7 +2,10 @@ import { createServer } from "node:http";
 import { gunzipSync } from "node:zlib";
 import { logs } from "@opentelemetry/api-logs";
 import { ExportResultCode } from "@opentelemetry/core";
-import type { LogRecordExporter, ReadableLogRecord } from "@opentelemetry/sdk-logs";
+import type {
+  LogRecordExporter,
+  ReadableLogRecord,
+} from "@opentelemetry/sdk-logs";
 import type { PostHogOptions } from "posthog-node";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import packageJson from "../package.json" with { type: "json" };
@@ -670,9 +673,7 @@ describe("createBridgeTelemetry", () => {
 
     expect(records).toHaveLength(1);
     const record = records[0];
-    expect(record?.body).toBe(
-      "forwarded [redacted-url] bearer [redacted]",
-    );
+    expect(record?.body).toBe("forwarded [redacted-url] bearer [redacted]");
     expect(record?.attributes).toMatchObject({
       kind: "forwarded",
       upstreamStatus: 502,
@@ -695,9 +696,9 @@ describe("createBridgeTelemetry", () => {
 
   it("shuts down the default client without patching console or sending", async () => {
     const consoleLog = console.log;
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(null, { status: 200 }),
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(null, { status: 200 }));
     const telemetry = track(
       createBridgeTelemetry({ POSTHOG_PROJECT_KEY: "phc_test_project" }),
     );
@@ -787,7 +788,9 @@ describe("createBridgeTelemetry", () => {
         upstreamStatus: 200,
       });
       await telemetry.flush();
-      const analyticsPosts = ingest.seen.filter((entry) => entry.url === "/batch/");
+      const analyticsPosts = ingest.seen.filter(
+        (entry) => entry.url === "/batch/",
+      );
       expect(analyticsPosts).toHaveLength(1);
       expect(analyticsPosts[0]?.responded).toBe(true);
       expect(analyticsPosts[0]?.socketDestroyedBeforeResponse).toBe(false);

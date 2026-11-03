@@ -55,7 +55,9 @@ try {
     signal: AbortSignal.timeout(5000),
   });
   if (upstreamRes.status !== 404) {
-    throw new Error(`upstream GET returned ${upstreamRes.status}, expected 404`);
+    throw new Error(
+      `upstream GET returned ${upstreamRes.status}, expected 404`,
+    );
   }
 
   const before = captureCount(meta.capturesPath);

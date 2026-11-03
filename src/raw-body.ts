@@ -8,9 +8,7 @@ import type { IncomingMessage } from "node:http";
  * those two events. Async iteration sees the already-ended stream and returns
  * nothing, which breaks detached JWS verification locally.
  */
-export async function readRawBody(
-  req: IncomingMessage,
-): Promise<Uint8Array> {
+export async function readRawBody(req: IncomingMessage): Promise<Uint8Array> {
   const chunks: Buffer[] = [];
   await new Promise<void>((resolve, reject) => {
     let settled = false;

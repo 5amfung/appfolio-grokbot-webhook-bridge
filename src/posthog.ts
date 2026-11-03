@@ -201,7 +201,12 @@ export function createBridgeTelemetry(
       apiKey,
       analyticsOptions(host, environment, serviceVersion),
     );
-    const logsConfig = logsStartConfig(host, apiKey, environment, serviceVersion);
+    const logsConfig = logsStartConfig(
+      host,
+      apiKey,
+      environment,
+      serviceVersion,
+    );
     logs = deps.startLogs
       ? deps.startLogs(logsConfig)
       : startLogsPipeline(logsConfig, deps.createLogExporter);
@@ -244,6 +249,7 @@ export function createBridgeTelemetry(
           attributes: properties,
         });
       } catch {
+        // A log export failure must not prevent analytics capture.
       }
       try {
         analytics.capture?.({
@@ -490,7 +496,9 @@ function startLogsPipeline(
   };
 }
 
-function defaultCreateLogExporter(options: LogExporterOptions): LogRecordExporter {
+function defaultCreateLogExporter(
+  options: LogExporterOptions,
+): LogRecordExporter {
   return new OTLPLogExporter({
     url: options.url,
     headers: options.headers,
@@ -597,7 +605,9 @@ function redactString(value: string): string {
 
 type FlushClient = "analytics" | "logs";
 
-function settleNamed(tasks: Array<[FlushClient, Promise<unknown>]>): Promise<void> {
+function settleNamed(
+  tasks: Array<[FlushClient, Promise<unknown>]>,
+): Promise<void> {
   return Promise.all(
     tasks.map(async ([client, task]) => {
       try {
@@ -609,7 +619,10 @@ function settleNamed(tasks: Array<[FlushClient, Promise<unknown>]>): Promise<voi
   ).then(() => undefined);
 }
 
-function settleWithin(task: Promise<unknown>, timeoutMs: number): Promise<void> {
+function settleWithin(
+  task: Promise<unknown>,
+  timeoutMs: number,
+): Promise<void> {
   return new Promise((resolve) => {
     const timer = setTimeout(resolve, timeoutMs);
     task.then(

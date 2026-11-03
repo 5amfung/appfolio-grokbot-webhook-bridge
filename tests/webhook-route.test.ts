@@ -67,15 +67,13 @@ describe("handleAppfolioWebhook (route logic, mocked upstream)", () => {
 
   it("forwards raw body on valid signature and maps 2xx → forwarded", async () => {
     const { detached, jwks } = await signDetached(rawBody);
-    const fetchImpl = vi.fn(
-      async (_url: string | URL, init?: RequestInit) => {
-        expect(init?.body).toBe(rawBody);
-        expect((init?.headers as Record<string, string>).Authorization).toBe(
-          "Bearer crsr_x",
-        );
-        return new Response(null, { status: 200 });
-      },
-    ) as unknown as typeof fetch;
+    const fetchImpl = vi.fn(async (_url: string | URL, init?: RequestInit) => {
+      expect(init?.body).toBe(rawBody);
+      expect((init?.headers as Record<string, string>).Authorization).toBe(
+        "Bearer crsr_x",
+      );
+      return new Response(null, { status: 200 });
+    }) as unknown as typeof fetch;
 
     const outcome = await handleAppfolioWebhook(rawBody, detached, {
       jwks,
@@ -243,7 +241,9 @@ describe("handleWebhookRequest", () => {
   ) {
     expect(captured).toHaveBeenCalledOnce();
     expect(flush).toHaveBeenCalledOnce();
-    expect(waitUntil).toHaveBeenCalledExactlyOnceWith(flush.mock.results[0]?.value);
+    expect(waitUntil).toHaveBeenCalledExactlyOnceWith(
+      flush.mock.results[0]?.value,
+    );
     expect(captured.mock.invocationCallOrder[0]).toBeLessThan(
       flush.mock.invocationCallOrder[0],
     );
@@ -259,10 +259,12 @@ describe("handleWebhookRequest", () => {
       new TextDecoder().decode(rawBody) + " ",
     );
     const jwksUrl = stubBridgeEnv();
-    const fetchImpl = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      expect(String(input)).toBe(jwksUrl);
-      return Response.json({ keys: [jwk] });
-    });
+    const fetchImpl = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input) => {
+        expect(String(input)).toBe(jwksUrl);
+        return Response.json({ keys: [jwk] });
+      });
     const http = fakeResponse();
     const seen = fakeTelemetry();
     try {
@@ -297,10 +299,12 @@ describe("handleWebhookRequest", () => {
     const { detached } = await signedRequest(rawBody, "route-good");
     const other = await signedRequest(rawBody, "other-kid");
     const jwksUrl = stubBridgeEnv();
-    const fetchImpl = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      expect(String(input)).toBe(jwksUrl);
-      return Response.json({ keys: [other.jwk] });
-    });
+    const fetchImpl = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input) => {
+        expect(String(input)).toBe(jwksUrl);
+        return Response.json({ keys: [other.jwk] });
+      });
     const http = fakeResponse();
     const seen = fakeTelemetry();
     try {
@@ -333,12 +337,14 @@ describe("handleWebhookRequest", () => {
   it("returns 200 and records the upstream status when the forward succeeds", async () => {
     const { detached, jwk } = await signedRequest(rawBody, "route-good");
     const jwksUrl = stubBridgeEnv();
-    const fetchImpl = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const url = String(input);
-      if (url === jwksUrl) return Response.json({ keys: [jwk] });
-      expect(url).toBe(WEBHOOK_URL);
-      return new Response(null, { status: 200 });
-    });
+    const fetchImpl = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input) => {
+        const url = String(input);
+        if (url === jwksUrl) return Response.json({ keys: [jwk] });
+        expect(url).toBe(WEBHOOK_URL);
+        return new Response(null, { status: 200 });
+      });
     const http = fakeResponse();
     const seen = fakeTelemetry();
     try {
@@ -365,11 +371,13 @@ describe("handleWebhookRequest", () => {
   it("returns 502 and records upstreamStatus 500", async () => {
     const { detached, jwk } = await signedRequest(rawBody, "route-good");
     const jwksUrl = stubBridgeEnv();
-    const fetchImpl = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const url = String(input);
-      if (url === jwksUrl) return Response.json({ keys: [jwk] });
-      return new Response("fail", { status: 500 });
-    });
+    const fetchImpl = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input) => {
+        const url = String(input);
+        if (url === jwksUrl) return Response.json({ keys: [jwk] });
+        return new Response("fail", { status: 500 });
+      });
     const http = fakeResponse();
     const seen = fakeTelemetry();
     try {
@@ -403,11 +411,13 @@ describe("handleWebhookRequest", () => {
     (cause as Error & { code: string }).code = "ECONNREFUSED";
     const thrown = new TypeError("fetch failed");
     (thrown as Error & { cause: unknown }).cause = cause;
-    const fetchImpl = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const url = String(input);
-      if (url === jwksUrl) return Response.json({ keys: [jwk] });
-      throw thrown;
-    });
+    const fetchImpl = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input) => {
+        const url = String(input);
+        if (url === jwksUrl) return Response.json({ keys: [jwk] });
+        throw thrown;
+      });
     const http = fakeResponse();
     const seen = fakeTelemetry();
     try {

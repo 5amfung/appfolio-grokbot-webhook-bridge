@@ -2,5 +2,5 @@ allowBuilds:
   esbuild: true
   protobufjs: false
 minimumReleaseAgeExclude:
-  - '@posthog/core@1.62.0'
+  - "@posthog/core@1.62.0"
   - posthog-node@5.61.1

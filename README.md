@@ -8,20 +8,20 @@ Deploy target: Vercel. Production updates only when a release merges. See [Relea
 
 ## Routes
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| `GET` | `/api/health` | `200 { ok: true }` when webhook config loads. `500 { ok: false, reason }` when it does not. |
-| `POST` | `/api/webhooks/appfolio` | Verify AppFolio JWS, forward raw body to Grok Bot |
+| Method | Path                     | Purpose                                                                                     |
+| ------ | ------------------------ | ------------------------------------------------------------------------------------------- |
+| `GET`  | `/api/health`            | `200 { ok: true }` when webhook config loads. `500 { ok: false, reason }` when it does not. |
+| `POST` | `/api/webhooks/appfolio` | Verify AppFolio JWS, forward raw body to Grok Bot                                           |
 
 ## Environment (Vercel only — never commit secrets)
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `GROK_BOT_WEBHOOK_URL` | yes | Full URL of the Grok Bot inbound webhook |
-| `GROK_BOT_BEARER_TOKEN` | yes | Bearer token (`crsr_…`) |
-| `APPFOLIO_JWKS_URL` | no | Override JWKS URL (default `https://api.appfolio.com/.well-known/jwks.json`) |
-| `POSTHOG_PROJECT_KEY` | no | PostHog project token (`phc_…`). Unset → telemetry is a no-op (no network). Not a personal API key (`phx_…`). |
-| `POSTHOG_HOST` | no | PostHog ingest host (default `https://us.i.posthog.com`; EU Cloud is `https://eu.i.posthog.com`) |
+| Variable                | Required | Description                                                                                                   |
+| ----------------------- | -------- | ------------------------------------------------------------------------------------------------------------- |
+| `GROK_BOT_WEBHOOK_URL`  | yes      | Full URL of the Grok Bot inbound webhook                                                                      |
+| `GROK_BOT_BEARER_TOKEN` | yes      | Bearer token (`crsr_…`)                                                                                       |
+| `APPFOLIO_JWKS_URL`     | no       | Override JWKS URL (default `https://api.appfolio.com/.well-known/jwks.json`)                                  |
+| `POSTHOG_PROJECT_KEY`   | no       | PostHog project token (`phc_…`). Unset → telemetry is a no-op (no network). Not a personal API key (`phx_…`). |
+| `POSTHOG_HOST`          | no       | PostHog ingest host (default `https://us.i.posthog.com`; EU Cloud is `https://eu.i.posthog.com`)              |
 
 Set `POSTHOG_PROJECT_KEY` (and `POSTHOG_HOST` only if the project is not on US Cloud) in the Vercel project for the environments you want to observe. This repo does not set those variables.
 
@@ -35,11 +35,11 @@ When `POSTHOG_PROJECT_KEY` is unset, `createBridgeTelemetry()` does not construc
 
 Logs are OTLP records sent to `{POSTHOG_HOST}/i/v1/logs` with this service identity:
 
-| Resource attribute | Value |
-|--------------------|--------|
-| `service.name` | `appfolio-grokbot-webhook-bridge` |
-| `deployment.environment` | `VERCEL_ENV`, or `development` when unset |
-| `service.version` | `VERCEL_GIT_COMMIT_SHA`, or this package's `version` |
+| Resource attribute       | Value                                                |
+| ------------------------ | ---------------------------------------------------- |
+| `service.name`           | `appfolio-grokbot-webhook-bridge`                    |
+| `deployment.environment` | `VERCEL_ENV`, or `development` when unset            |
+| `service.version`        | `VERCEL_GIT_COMMIT_SHA`, or this package's `version` |
 
 Console log autocapture is off. Do not send request bodies, headers, signatures, bearer tokens, upstream URLs, or AppFolio payload fields. Later captures use the fixed distinct id `appfolio-grokbot-webhook-bridge` and disable person profiles.
 
@@ -76,10 +76,14 @@ Requires Node 24 (`package.json` `engines` is `24.x`. CI runs Node 24).
 
 ```bash
 pnpm install
+pnpm run lint
+pnpm run format:check
 pnpm run typecheck
 pnpm test
 pnpm dlx vercel dev   # after setting env (vercel env pull or .env)
 ```
+
+CI runs lint, formatting, type checks, and tests. Use `pnpm run lint:fix` to apply available ESLint fixes and `pnpm run format` to format files with Prettier. Generated files and the locked design document are excluded from formatting.
 
 `package.json` has no `dev` script. `vercel dev` runs `scripts.dev` when one is set, and a `dev` script of `vercel dev` aborts as a recursive invocation.
 
