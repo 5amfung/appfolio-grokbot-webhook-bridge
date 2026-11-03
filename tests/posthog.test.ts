@@ -748,7 +748,7 @@ describe("createBridgeTelemetry", () => {
       event_id: "e1",
       resource_id: 42,
       kind: "updated",
-      details: { urgent: true, description: "수도꼭지 누수" },
+      details: { urgent: true, description: "Leaking faucet" },
       attachments: [{ url: "https://files.example/photo.jpg" }],
       optional: null,
       empty: [],
@@ -777,7 +777,7 @@ describe("createBridgeTelemetry", () => {
       "payload.resource_id": 42,
       "payload.kind": "updated",
       "payload.details.urgent": true,
-      "payload.details.description": "수도꼭지 누수",
+      "payload.details.description": "Leaking faucet",
       "payload.attachments.0.url": "https://files.example/photo.jpg",
       "payload.optional": null,
       "payload.empty": [],
@@ -801,7 +801,7 @@ describe("createBridgeTelemetry", () => {
   it.each([
     [
       "raw UTF-8 bytes",
-      JSON.stringify({ description: "한".repeat(22_000) }),
+      JSON.stringify({ description: "\u20AC".repeat(22_000) }),
       0,
     ],
     ["body at 64 KiB", "0".padEnd(64 * 1_024), 1],
@@ -839,7 +839,7 @@ describe("createBridgeTelemetry", () => {
     [
       "multibyte paths",
       JSON.stringify({
-        ["한".repeat(128)]: Object.fromEntries(
+        ["\u20AC".repeat(128)]: Object.fromEntries(
           Array.from({ length: 200 }, (_, index) => [`field${index}`, index]),
         ),
       }),

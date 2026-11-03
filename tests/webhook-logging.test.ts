@@ -13,7 +13,7 @@ vi.mock("@vercel/functions", () => ({ waitUntil: vi.fn() }));
 
 it("exports forwarded payloads and bounds unsigned request logs through real HTTP", async () => {
   const payload =
-    '{\n  "client_id": "proof-client", "event_id": "proof-event-001",\n  "topic": "work_order_updates", "description": "싱크대 누수",\n  "photo_url": "https://example.test/photo",\n  "details": { "priority": 2, "urgent": true }\n}\n';
+    '{\n  "client_id": "proof-client", "event_id": "proof-event-001",\n  "topic": "work_order_updates", "description": "Leaking sink",\n  "photo_url": "https://example.test/photo",\n  "details": { "priority": 2, "urgent": true }\n}\n';
   const rawBody = Buffer.from(payload, "utf8");
   const { publicKey, privateKey } = await generateKeyPair("PS256", {
     extractable: true,
@@ -132,7 +132,7 @@ it("exports forwarded payloads and bounds unsigned request logs through real HTT
       "payload.client_id": "proof-client",
       "payload.event_id": "proof-event-001",
       "payload.topic": "work_order_updates",
-      "payload.description": "싱크대 누수",
+      "payload.description": "Leaking sink",
       "payload.photo_url": "https://example.test/photo",
       "payload.details.priority": 2,
       "payload.details.urgent": true,
