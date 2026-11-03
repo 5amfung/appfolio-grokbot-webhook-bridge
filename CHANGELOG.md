@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/compare/v0.3.2...v0.4.0) (2026-11-03)
+
+
+### Features
+
+* **posthog:** pass package version to getLogger scope ([#23](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/issues/23)) ([cbbb78e](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/commit/cbbb78eec25d70255cabb8ecac03baeeee612c9b))
+
+
+### Bug Fixes
+
+* **posthog:** finish telemetry exports with waitUntil ([#25](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/issues/25)) ([dc680d3](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/commit/dc680d37ff390dbea62c6b324bc7d408f07c17d3))
+
 ## [0.3.2](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/compare/v0.3.1...v0.3.2) (2026-11-02)
 
 
