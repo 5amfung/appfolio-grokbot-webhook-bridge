@@ -8,12 +8,12 @@ import { CompactSign, exportJWK, generateKeyPair } from "jose";
 import { expect, it, vi } from "vitest";
 import { handleWebhookRequest } from "../api/webhooks/appfolio.js";
 import { createBridgeTelemetry } from "../src/posthog.js";
+import appfolioWebhook from "./fixtures/appfolio-work-order-webhook.json" with { type: "json" };
 
 vi.mock("@vercel/functions", () => ({ waitUntil: vi.fn() }));
 
 it("exports forwarded payloads and bounds unsigned request logs through real HTTP", async () => {
-  const payload =
-    '{\n  "client_id": "proof-client", "event_id": "proof-event-001",\n  "topic": "work_order_updates", "description": "Leaking sink",\n  "photo_url": "https://example.test/photo",\n  "details": { "priority": 2, "urgent": true }\n}\n';
+  const payload = JSON.stringify(appfolioWebhook, null, 2) + "\n";
   const rawBody = Buffer.from(payload, "utf8");
   const { publicKey, privateKey } = await generateKeyPair("PS256", {
     extractable: true,
@@ -129,15 +129,24 @@ it("exports forwarded payloads and bounds unsigned request logs through real HTT
       kind: "forwarded",
       reason: "forwarded",
       upstreamStatus: 204,
-      "payload.client_id": "proof-client",
-      "payload.event_id": "proof-event-001",
-      "payload.topic": "work_order_updates",
-      "payload.description": "Leaking sink",
-      "payload.photo_url": "https://example.test/photo",
-      "payload.details.priority": 2,
-      "payload.details.urgent": true,
       environment: "test",
       serviceVersion: "logging-proof",
+    });
+    expect(
+      Object.fromEntries(
+        Object.entries(log.attributes).filter(([key]) =>
+          key.startsWith("payload."),
+        ),
+      ),
+    ).toEqual({
+      "payload.client_id": appfolioWebhook.client_id,
+      "payload.event_id": appfolioWebhook.event_id,
+      "payload.event_timestamp": appfolioWebhook.event_timestamp,
+      "payload.event_type": appfolioWebhook.event_type,
+      "payload.message_sent_at": appfolioWebhook.message_sent_at,
+      "payload.resource_id": appfolioWebhook.resource_id,
+      "payload.topic": appfolioWebhook.topic,
+      "payload.database_id": appfolioWebhook.database_id,
     });
     expect(log.attributes).not.toHaveProperty("payload");
     const outboundDurationMs = log.attributes.outboundDurationMs;
@@ -162,7 +171,10 @@ it("exports forwarded payloads and bounds unsigned request logs through real HTT
     const analyticsText = analyticsPosts.map((entry) => entry.body).join("\n");
     expect(analyticsText).toContain("webhook_handled");
     expect(analyticsText).toContain("outboundDurationMs");
-    expect(analyticsText).not.toContain("proof-event-001");
+    expect(analyticsText).not.toContain(appfolioWebhook.client_id);
+    expect(analyticsText).not.toContain(appfolioWebhook.event_id);
+    expect(analyticsText).not.toContain(appfolioWebhook.resource_id);
+    expect(analyticsText).not.toContain(appfolioWebhook.database_id);
     expect(analyticsText).not.toContain('"payload.');
 
     console.log(

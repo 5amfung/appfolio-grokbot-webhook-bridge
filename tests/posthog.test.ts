@@ -20,6 +20,7 @@ import {
   type BridgeTelemetryDeps,
   type LogExporterOptions,
 } from "../src/posthog.js";
+import appfolioWebhook from "./fixtures/appfolio-work-order-webhook.json" with { type: "json" };
 
 const started: BridgeTelemetry[] = [];
 
@@ -721,87 +722,109 @@ describe("createBridgeTelemetry", () => {
     }
   });
 
-  it("exports payload fields as typed log properties without adding them to analytics", async () => {
-    const records: ReadableLogRecord[] = [];
-    const capture = vi.fn();
-    const telemetry = track(
-      createBridgeTelemetry(
-        { POSTHOG_PROJECT_KEY: "phc_test_project" },
+  it.each([
+    {
+      name: "the AppFolio event envelope",
+      payload: appfolioWebhook,
+      payloadProperties: {
+        "payload.client_id": appfolioWebhook.client_id,
+        "payload.event_id": appfolioWebhook.event_id,
+        "payload.event_timestamp": appfolioWebhook.event_timestamp,
+        "payload.event_type": appfolioWebhook.event_type,
+        "payload.message_sent_at": appfolioWebhook.message_sent_at,
+        "payload.resource_id": appfolioWebhook.resource_id,
+        "payload.topic": appfolioWebhook.topic,
+        "payload.database_id": appfolioWebhook.database_id,
+      },
+    },
+    {
+      name: "synthetic JSON values",
+      payload: {
+        string_value: "synthetic",
+        number_value: 42,
+        nested: { enabled: true },
+        array_value: [{ url: "https://example.test/asset" }],
+        nullable_value: null,
+        empty_array: [],
+        "nested.enabled": false,
+      },
+      payloadProperties: {
+        "payload.string_value": "synthetic",
+        "payload.number_value": 42,
+        "payload.nested.enabled": true,
+        "payload.array_value.0.url": "https://example.test/asset",
+        "payload.nullable_value": null,
+        "payload.empty_array": [],
+        "payload.nested\\.enabled": false,
+      },
+    },
+  ])(
+    "exports $name without adding payload fields to analytics",
+    async ({ payload, payloadProperties }) => {
+      const records: ReadableLogRecord[] = [];
+      const capture = vi.fn();
+      const telemetry = track(
+        createBridgeTelemetry(
+          { POSTHOG_PROJECT_KEY: "phc_test_project" },
+          {
+            createAnalyticsClient: () => ({
+              capture,
+              flush: async () => undefined,
+              shutdown: async () => undefined,
+            }),
+            createLogExporter: () => ({
+              export(batch, callback) {
+                records.push(...batch);
+                callback({ code: ExportResultCode.SUCCESS });
+              },
+              shutdown: async () => undefined,
+              forceFlush: async () => undefined,
+            }),
+          },
+        ),
+      );
+      telemetry.captureWebhookHandled(
         {
-          createAnalyticsClient: () => ({
-            capture,
-            flush: async () => undefined,
-            shutdown: async () => undefined,
-          }),
-          createLogExporter: () => ({
-            export(batch, callback) {
-              records.push(...batch);
-              callback({ code: ExportResultCode.SUCCESS });
-            },
-            shutdown: async () => undefined,
-            forceFlush: async () => undefined,
-          }),
+          kind: "forwarded",
+          reason: "forwarded",
+          durationMs: 12,
+          upstreamStatus: 200,
+          outboundDurationMs: 8.5,
         },
-      ),
-    );
-    const payload = {
-      event_id: "e1",
-      resource_id: 42,
-      kind: "updated",
-      details: { urgent: true, description: "Leaking faucet" },
-      attachments: [{ url: "https://files.example/photo.jpg" }],
-      optional: null,
-      empty: [],
-      "details.urgent": false,
-      fields: Object.fromEntries(
-        Array.from({ length: 200 }, (_, index) => [`field${index}`, index]),
-      ),
-    };
-    telemetry.captureWebhookHandled(
-      {
+        new TextEncoder().encode(JSON.stringify(payload)),
+      );
+      await telemetry.flush();
+
+      expect(records).toHaveLength(1);
+      expect(records[0]?.attributes).toEqual({
         kind: "forwarded",
         reason: "forwarded",
         durationMs: 12,
         upstreamStatus: 200,
         outboundDurationMs: 8.5,
-      },
-      new TextEncoder().encode(JSON.stringify(payload)),
-    );
-    await telemetry.flush();
-
-    expect(records).toHaveLength(1);
-    expect(records[0]?.attributes).toMatchObject({
-      kind: "forwarded",
-      outboundDurationMs: 8.5,
-      "payload.event_id": "e1",
-      "payload.resource_id": 42,
-      "payload.kind": "updated",
-      "payload.details.urgent": true,
-      "payload.details.description": "Leaking faucet",
-      "payload.attachments.0.url": "https://files.example/photo.jpg",
-      "payload.optional": null,
-      "payload.empty": [],
-      "payload.details\\.urgent": false,
-      "payload.fields.field199": 199,
-    });
-    expect(records[0]?.droppedAttributesCount).toBe(0);
-    expect(records[0]?.attributes).not.toHaveProperty("payload");
-    expect(capture).toHaveBeenCalledOnce();
-    expect(capture.mock.calls[0]?.[0].properties).toEqual({
-      kind: "forwarded",
-      reason: "forwarded",
-      durationMs: 12,
-      upstreamStatus: 200,
-      outboundDurationMs: 8.5,
-      environment: DEFAULT_DEPLOYMENT_ENVIRONMENT,
-      serviceVersion: packageJson.version,
-    });
-  });
+        environment: DEFAULT_DEPLOYMENT_ENVIRONMENT,
+        serviceVersion: packageJson.version,
+        ...payloadProperties,
+      });
+      expect(records[0]?.droppedAttributesCount).toBe(0);
+      expect(records[0]?.attributes).not.toHaveProperty("payload");
+      expect(capture).toHaveBeenCalledOnce();
+      expect(capture.mock.calls[0]?.[0].properties).toEqual({
+        kind: "forwarded",
+        reason: "forwarded",
+        durationMs: 12,
+        upstreamStatus: 200,
+        outboundDurationMs: 8.5,
+        environment: DEFAULT_DEPLOYMENT_ENVIRONMENT,
+        serviceVersion: packageJson.version,
+      });
+    },
+  );
 
   it.each([
     [
       "raw UTF-8 bytes",
-      JSON.stringify({ description: "\u20AC".repeat(22_000) }),
+      JSON.stringify({ value: "\u20AC".repeat(22_000) }),
       0,
     ],
     ["body at 64 KiB", "0".padEnd(64 * 1_024), 1],

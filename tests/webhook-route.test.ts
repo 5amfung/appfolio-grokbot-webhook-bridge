@@ -11,6 +11,7 @@ import {
 } from "jose";
 import { handleWebhookRequest } from "../api/webhooks/appfolio.js";
 import { handleAppfolioWebhook } from "../src/handle-appfolio-webhook.js";
+import appfolioWebhook from "./fixtures/appfolio-work-order-webhook.json" with { type: "json" };
 
 vi.mock("@vercel/functions", () => ({ waitUntil: vi.fn() }));
 
@@ -38,17 +39,7 @@ async function signDetached(rawBody: Uint8Array) {
 }
 
 describe("handleAppfolioWebhook (route logic, mocked upstream)", () => {
-  const rawBody = new TextEncoder().encode(
-    JSON.stringify({
-      client_id: "c1",
-      event_id: "e1",
-      topic: "work_order_updates",
-      resource_id: "r1",
-      event_timestamp: "2023-03-27T16:55:12Z",
-      message_sent_at: "2023-08-28T23:18:27Z",
-      event_type: "updated",
-    }),
-  );
+  const rawBody = new TextEncoder().encode(JSON.stringify(appfolioWebhook));
 
   it("returns unauthorized when signature is invalid", async () => {
     const { jwks } = await signDetached(rawBody);
@@ -148,13 +139,7 @@ describe("handleAppfolioWebhook (route logic, mocked upstream)", () => {
 const WEBHOOK_URL = "https://bot.example/hook";
 
 describe("handleWebhookRequest", () => {
-  const rawBody = new TextEncoder().encode(
-    JSON.stringify({
-      client_id: "c1",
-      event_id: "e1",
-      topic: "work_order_updates",
-    }),
-  );
+  const rawBody = new TextEncoder().encode(JSON.stringify(appfolioWebhook));
 
   async function signedRequest(body: Uint8Array, kid: string) {
     const { publicKey, privateKey } = await generateKeyPair("PS256", {

@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { forwardToGrokBot } from "../src/forward-to-grok-bot.js";
+import appfolioWebhook from "./fixtures/appfolio-work-order-webhook.json" with { type: "json" };
 
 describe("forwardToGrokBot", () => {
-  const body = new TextEncoder().encode('{"event_id":"1"}');
+  const body = new TextEncoder().encode(JSON.stringify(appfolioWebhook));
   const url = "https://bot.example/hooks/inbound";
   const token = "crsr_test";
 
