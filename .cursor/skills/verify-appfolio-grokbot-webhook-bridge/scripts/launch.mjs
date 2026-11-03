@@ -147,7 +147,9 @@ async function waitForBridge(baseUrl, port, bridgePid, capturesPath, logPath) {
     }
     sleep(300);
   }
-  throw new Error(`timed out waiting for ${baseUrl}: ${lastError}\n${tail(logPath)}`);
+  throw new Error(
+    `timed out waiting for ${baseUrl}: ${lastError}\n${tail(logPath)}`,
+  );
 }
 
 const root = repoRoot();
@@ -180,7 +182,9 @@ if (overrides.length > 0) {
 }
 
 if (!existsSync(path.join(root, "node_modules", "jose", "package.json"))) {
-  fail("node_modules/jose is missing. Run pnpm install --frozen-lockfile from the repo root.");
+  fail(
+    "node_modules/jose is missing. Run pnpm install --frozen-lockfile from the repo root.",
+  );
 }
 
 const nodeMajor = Number(process.versions.node.split(".")[0]);
@@ -298,13 +302,7 @@ try {
   delete childEnv.__VERCEL_DEV_RUNNING;
   const bridge = spawn(
     vercelBin,
-    [
-      "dev",
-      "--local",
-      "--listen",
-      `127.0.0.1:${started.bridgePort}`,
-      "--yes",
-    ],
+    ["dev", "--local", "--listen", `127.0.0.1:${started.bridgePort}`, "--yes"],
     {
       cwd: root,
       detached: true,

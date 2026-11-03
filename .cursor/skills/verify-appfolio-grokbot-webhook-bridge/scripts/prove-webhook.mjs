@@ -19,7 +19,9 @@ function writeProof(outPath, proof) {
 
 function readResponse(headersPath, bodyPath) {
   const headerText = readFileSync(headersPath, "utf8").trim();
-  const blocks = headerText.split(/\r?\n\r?\n/).filter((block) => block.length > 0);
+  const blocks = headerText
+    .split(/\r?\n\r?\n/)
+    .filter((block) => block.length > 0);
   const last = blocks[blocks.length - 1] || "";
   const lines = last.split(/\r?\n/);
   const statusMatch = (lines[0] || "").match(/^HTTP\/\d+(?:\.\d+)?\s+(\d+)/);
@@ -29,7 +31,10 @@ function readResponse(headersPath, bodyPath) {
     if (idx === -1) {
       continue;
     }
-    headers.set(line.slice(0, idx).trim().toLowerCase(), line.slice(idx + 1).trim());
+    headers.set(
+      line.slice(0, idx).trim().toLowerCase(),
+      line.slice(idx + 1).trim(),
+    );
   }
   return {
     status: statusMatch ? Number(statusMatch[1]) : null,
@@ -63,13 +68,18 @@ try {
   if (response.status !== expectStatus) {
     throw new Error(`bridge status ${response.status} != ${expectStatus}`);
   }
-  if (args["expect-body"] !== undefined && response.body !== args["expect-body"]) {
+  if (
+    args["expect-body"] !== undefined &&
+    response.body !== args["expect-body"]
+  ) {
     throw new Error(`bridge body ${response.body} != ${args["expect-body"]}`);
   }
   if (args["expect-body"] === undefined && expectForward === "false") {
     const parsed = JSON.parse(response.body);
     if (typeof parsed.error !== "string" || parsed.error.length === 0) {
-      throw new Error(`expected a non-empty error string, got ${response.body}`);
+      throw new Error(
+        `expected a non-empty error string, got ${response.body}`,
+      );
     }
   }
   for (const raw of asArray(args["expect-header"])) {

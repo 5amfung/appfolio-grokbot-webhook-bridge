@@ -1,4 +1,7 @@
-import type { AppfolioJwks, VerifyClassification } from "./verify-appfolio-jws.js";
+import type {
+  AppfolioJwks,
+  VerifyClassification,
+} from "./verify-appfolio-jws.js";
 import { verifyAppfolioJws } from "./verify-appfolio-jws.js";
 import {
   forwardToGrokBot,
@@ -6,7 +9,11 @@ import {
 } from "./forward-to-grok-bot.js";
 
 export type HandlerOutcome =
-  | { kind: "unauthorized"; reason: string; classification: VerifyClassification }
+  | {
+      kind: "unauthorized";
+      reason: string;
+      classification: VerifyClassification;
+    }
   | { kind: "forwarded"; upstreamStatus: number }
   | { kind: "upstream_failure"; error: string; upstreamStatus: number }
   | { kind: "upstream_failure"; error: string; failure: UpstreamFetchFailure };

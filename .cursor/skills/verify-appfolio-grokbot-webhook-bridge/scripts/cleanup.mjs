@@ -42,9 +42,7 @@ try {
     let ownsLock = false;
     try {
       const lock = readLock(meta.lockPath);
-      ownsLock = Boolean(
-        lock && canonicalPath(String(lock.runDir)) === runDir,
-      );
+      ownsLock = Boolean(lock && canonicalPath(String(lock.runDir)) === runDir);
     } catch {
       ownsLock = false;
     }

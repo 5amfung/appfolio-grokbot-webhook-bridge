@@ -111,7 +111,7 @@ export function listenerPids(port) {
       return [];
     }
     const message = err instanceof Error ? err.message : String(err);
-    throw new Error(`lsof failed for port ${port}: ${message}`);
+    throw new Error(`lsof failed for port ${port}: ${message}`, { cause: err });
   }
 }
 
@@ -153,7 +153,7 @@ export function processGroupPids(leaderPid) {
   if (!Number.isInteger(leaderPid) || leaderPid <= 0) {
     return [];
   }
-  let out = "";
+  let out;
   try {
     out = execFileSync("ps", ["-axo", "pid=,pgid=,stat="], {
       encoding: "utf8",
@@ -348,7 +348,13 @@ export function releaseOwnedLock(lockPath, runDir) {
   }
 }
 
-export function beginOwnedRun({ lockPath, runDir, evidenceDir, starter, meta }) {
+export function beginOwnedRun({
+  lockPath,
+  runDir,
+  evidenceDir,
+  starter,
+  meta,
+}) {
   if (!tryCreateLock(lockPath, starter)) {
     return false;
   }

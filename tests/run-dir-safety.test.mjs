@@ -132,7 +132,11 @@ describe("verification run directory safety", () => {
       beginOwnedRun({
         ...fixture,
         starter: starterFor(fixture),
-        meta: { boundariesPid: null, bridgePid: null, lockPath: fixture.lockPath },
+        meta: {
+          boundariesPid: null,
+          bridgePid: null,
+          lockPath: fixture.lockPath,
+        },
       }),
     ).toBe(true);
     expect(assertDedicatedRunDir(fixture.runDir, repo)).toBe(
@@ -162,6 +166,8 @@ describe("verification run directory safety", () => {
     ).toThrow(/new empty directory/);
     expect(existsSync(fixture.lockPath)).toBe(false);
     expect(existsSync(path.join(fixture.runDir, "keep-me"))).toBe(true);
-    expect(existsSync(path.join(fixture.runDir, RUN_SENTINEL_NAME))).toBe(false);
+    expect(existsSync(path.join(fixture.runDir, RUN_SENTINEL_NAME))).toBe(
+      false,
+    );
   });
 });

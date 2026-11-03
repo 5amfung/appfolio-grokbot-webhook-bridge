@@ -40,8 +40,7 @@ type GroupFailure<F extends VerifyFamily> =
 
 type SigningKeyFailure = GroupFailure<"signing_key"> | typeof JWKS_FETCH_FAILED;
 type BadSignatureFailure =
-  | GroupFailure<"bad_signature">
-  | keyof typeof LOCAL_HTTP_REASON;
+  GroupFailure<"bad_signature"> | keyof typeof LOCAL_HTTP_REASON;
 type UnclassifiedFailure = GroupFailure<"unclassified"> | typeof VERIFY_FAILED;
 
 export type VerifyClassification =

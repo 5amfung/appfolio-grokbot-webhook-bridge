@@ -137,7 +137,9 @@ describe("verifyAppfolioJws", () => {
   it("leaves an unmapped jose code and an inherited code name unclassified", async () => {
     const { detached } = await makePs256Fixture(rawBody);
     const unmapped = await verifyAppfolioJws(rawBody, detached, async () => {
-      throw Object.assign(new Error("invalid key"), { code: "ERR_JWK_INVALID" });
+      throw Object.assign(new Error("invalid key"), {
+        code: "ERR_JWK_INVALID",
+      });
     });
     expect(unmapped).toEqual({
       ok: false,
