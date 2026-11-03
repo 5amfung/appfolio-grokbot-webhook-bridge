@@ -39,6 +39,11 @@ async function stop(telemetry: BridgeTelemetry): Promise<void> {
 }
 
 describe("createBridgeTelemetry", () => {
+  it("keeps the exporter timeout budget at most two seconds", () => {
+    expect(POSTHOG_FLUSH_TIMEOUT_MS).toBeGreaterThan(0);
+    expect(POSTHOG_FLUSH_TIMEOUT_MS).toBeLessThanOrEqual(2_000);
+  });
+
   it("is a no-op when POSTHOG_PROJECT_KEY is unset, empty, or whitespace", async () => {
     const createAnalyticsClient = vi.fn();
     const startLogs = vi.fn();
@@ -123,7 +128,7 @@ describe("createBridgeTelemetry", () => {
         "deployment.environment": "preview",
       },
       consoleLogAutocapture: false,
-      maxExportBatchSize: 1,
+      maxExportBatchSize: 64,
       exportTimeoutMillis: POSTHOG_FLUSH_TIMEOUT_MS,
       scheduledDelayMillis: POSTHOG_FLUSH_TIMEOUT_MS,
     });
@@ -489,7 +494,7 @@ describe("createBridgeTelemetry", () => {
     );
     try {
       await expect(telemetry.flush()).resolves.toBeUndefined();
-      expect(log.mock.calls.map((call) => call[0])).toEqual([
+      expect(log.mock.calls.map((call) => call[0]).sort()).toEqual([
         "telemetry_flush_failed analytics rejected",
         "telemetry_flush_failed logs rejected",
       ]);
@@ -503,32 +508,47 @@ describe("createBridgeTelemetry", () => {
     }
   });
 
-  it("writes a stdout line when flush times out and omits the error text", async () => {
+  it("awaits both real flush promises even after the transport timeout budget", async () => {
     vi.useFakeTimers();
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    let finishAnalytics!: () => void;
+    let finishLogs!: () => void;
+    const analyticsFlush = new Promise<void>((resolve) => {
+      finishAnalytics = resolve;
+    });
+    const logsFlush = new Promise<void>((resolve) => {
+      finishLogs = resolve;
+    });
     const telemetry = createBridgeTelemetry(
       { POSTHOG_PROJECT_KEY: "phc_test" },
       {
         createAnalyticsClient: () => ({
-          flush: () => new Promise(() => undefined),
+          flush: () => analyticsFlush,
           shutdown: async () => undefined,
         }),
         startLogs: () => ({
-          forceFlush: () => new Promise(() => undefined),
+          forceFlush: () => logsFlush,
           shutdown: async () => undefined,
         }),
       },
     );
     try {
-      const pending = telemetry.flush();
-      await vi.advanceTimersByTimeAsync(POSTHOG_FLUSH_TIMEOUT_MS);
+      let settled = false;
+      const pending = telemetry.flush().then(() => {
+        settled = true;
+      });
+      await vi.advanceTimersByTimeAsync(POSTHOG_FLUSH_TIMEOUT_MS + 1);
+      expect(settled).toBe(false);
+      finishAnalytics();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(settled).toBe(false);
+      finishLogs();
       await pending;
-      expect(log.mock.calls.map((call) => call[0])).toEqual([
-        "telemetry_flush_failed analytics timeout",
-        "telemetry_flush_failed logs timeout",
-      ]);
-      expect(JSON.stringify(log.mock.calls)).not.toContain("posthog.com");
+      expect(settled).toBe(true);
+      expect(log).not.toHaveBeenCalled();
     } finally {
+      finishAnalytics();
+      finishLogs();
       log.mockRestore();
       vi.useRealTimers();
     }
@@ -748,7 +768,7 @@ describe("createBridgeTelemetry", () => {
     }
   });
 
-  it("finishes a slow logs export before flush returns", async () => {
+  it("finishes slow analytics and logs exports before flush returns", async () => {
     const ingest = await startIngest(1_500);
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const telemetry = track(
@@ -767,6 +787,25 @@ describe("createBridgeTelemetry", () => {
         upstreamStatus: 200,
       });
       await telemetry.flush();
+      const analyticsPosts = ingest.seen.filter((entry) => entry.url === "/batch/");
+      expect(analyticsPosts).toHaveLength(1);
+      expect(analyticsPosts[0]?.responded).toBe(true);
+      expect(analyticsPosts[0]?.socketDestroyedBeforeResponse).toBe(false);
+      const analyticsBody = JSON.parse(analyticsPosts[0]?.body ?? "{}");
+      expect(analyticsBody.batch).toHaveLength(1);
+      expect(analyticsBody.batch[0]).toMatchObject({
+        event: "webhook_handled",
+        distinct_id: POSTHOG_DISTINCT_ID,
+        properties: {
+          kind: "forwarded",
+          reason: "forwarded",
+          upstreamStatus: 200,
+          durationMs: 12,
+          environment: "production",
+          serviceVersion: "deadbeef",
+          $process_person_profile: false,
+        },
+      });
       const posts = ingest.seen.filter((entry) => entry.url === "/i/v1/logs");
       expect(posts).toHaveLength(1);
       expect(posts[0]?.responded).toBe(true);

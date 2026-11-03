@@ -3,8 +3,8 @@
  *
  * Call `createBridgeTelemetry()` once per isolate. When `POSTHOG_PROJECT_KEY`
  * is unset the result is a complete no-op: no client, no OpenTelemetry
- * provider, no network. Await `flush()` before a serverless invocation
- * returns, and `shutdown()` only when the process is exiting.
+ * provider, no network. Register `flush()` with Vercel `waitUntil()` on
+ * every invocation, and `shutdown()` only when the process is exiting.
  *
  * Logs follow the Node.js OpenTelemetry setup (not the browser SDK):
  * https://posthog.com/docs/logs/installation/nodejs
@@ -48,7 +48,7 @@ export const DEFAULT_POSTHOG_HOST = "https://us.i.posthog.com";
 
 export const DEFAULT_DEPLOYMENT_ENVIRONMENT = "development";
 
-export const POSTHOG_FLUSH_TIMEOUT_MS = 10_000;
+export const POSTHOG_FLUSH_TIMEOUT_MS = 2_000;
 
 const PACKAGE_VERSION = packageJson.version.trim() || "0.0.0";
 
@@ -121,7 +121,9 @@ export type BridgeTelemetry = {
   captureWebhookHandled(event: WebhookHandledEvent): void;
   /**
    * Send queued analytics events and log records. Never throws.
-   * Use this before a serverless function returns. Does not disable the client.
+   * Register the returned promise with `waitUntil()` before the handler returns.
+   * Awaits the real exporters; transport timeouts apply to each export.
+   * Does not disable the client.
    */
   flush(): Promise<void>;
   /**
@@ -215,6 +217,8 @@ export function createBridgeTelemetry(
     return disabled;
   }
 
+  let logsFlushTail = Promise.resolve();
+
   return {
     enabled: true,
     serviceName: POSTHOG_SERVICE_NAME,
@@ -252,13 +256,14 @@ export function createBridgeTelemetry(
       }
     },
     flush() {
-      return settleNamed(
-        [
-          ["analytics", analytics.flush()],
-          ["logs", logs.forceFlush()],
-        ],
-        POSTHOG_FLUSH_TIMEOUT_MS,
-      );
+      // OTel returns early for overlapping forceFlush calls. Each request
+      // needs a fresh drain after the preceding export has settled.
+      const logsFlush = logsFlushTail.then(() => logs.forceFlush());
+      logsFlushTail = logsFlush.catch(() => undefined);
+      return settleNamed([
+        ["analytics", Promise.resolve().then(() => analytics.flush())],
+        ["logs", logsFlush],
+      ]);
     },
     shutdown() {
       return settleWithin(
@@ -412,7 +417,7 @@ function logsStartConfig(
       "deployment.environment": environment,
     },
     consoleLogAutocapture: false,
-    maxExportBatchSize: 1,
+    maxExportBatchSize: 64,
     exportTimeoutMillis: POSTHOG_FLUSH_TIMEOUT_MS,
     scheduledDelayMillis: POSTHOG_FLUSH_TIMEOUT_MS,
   };
@@ -592,41 +597,16 @@ function redactString(value: string): string {
 
 type FlushClient = "analytics" | "logs";
 
-function settleNamed(
-  tasks: Array<[FlushClient, Promise<unknown>]>,
-  timeoutMs: number,
-): Promise<void> {
+function settleNamed(tasks: Array<[FlushClient, Promise<unknown>]>): Promise<void> {
   return Promise.all(
     tasks.map(async ([client, task]) => {
-      const outcome = await settleOne(task, timeoutMs);
-      if (outcome === "ok") return;
-      console.log(`telemetry_flush_failed ${client} ${outcome}`);
+      try {
+        await task;
+      } catch {
+        console.log(`telemetry_flush_failed ${client} rejected`);
+      }
     }),
   ).then(() => undefined);
-}
-
-function settleOne(
-  task: Promise<unknown>,
-  timeoutMs: number,
-): Promise<"ok" | "rejected" | "timeout"> {
-  return new Promise((resolve) => {
-    let settled = false;
-    const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      resolve("timeout");
-    }, timeoutMs);
-    const finish = (outcome: "ok" | "rejected") => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      resolve(outcome);
-    };
-    task.then(
-      () => finish("ok"),
-      () => finish("rejected"),
-    );
-  });
 }
 
 function settleWithin(task: Promise<unknown>, timeoutMs: number): Promise<void> {
