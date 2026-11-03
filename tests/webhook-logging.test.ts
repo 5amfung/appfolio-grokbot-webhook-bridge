@@ -177,16 +177,6 @@ it("exports forwarded payloads and bounds unsigned request logs through real HTT
     expect(analyticsText).not.toContain(appfolioWebhook.database_id);
     expect(analyticsText).not.toContain('"payload.');
 
-    console.log(
-      "WEBHOOK_LOGGING_EVIDENCE",
-      JSON.stringify({
-        body: log.body,
-        ...log.attributes,
-        forwardedPayloadMatches: forwarded?.equals(rawBody),
-        analyticsContainsPayload: analyticsText.includes('"payload.'),
-      }),
-    );
-
     const rejectedBody = Buffer.from(
       '{"leaf":0,"child":'.repeat(2_000) + "0" + "}".repeat(2_000),
     );
@@ -222,14 +212,6 @@ it("exports forwarded payloads and bounds unsigned request logs through real HTT
       serviceVersion: "logging-proof",
     });
     expect(errors).toEqual([]);
-    console.log(
-      "BOUNDED_UNSIGNED_LOG_EVIDENCE",
-      JSON.stringify({
-        requestBytes: rejectedBody.byteLength,
-        logBytes: Buffer.byteLength(rejectedLogBody),
-        statusCode,
-      }),
-    );
   } finally {
     vi.unstubAllEnvs();
     await telemetry.shutdown();
