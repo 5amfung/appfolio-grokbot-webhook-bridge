@@ -51,7 +51,9 @@ Only the log includes the parsed payload. For example, `event_id` becomes `paylo
 
 Payload fields are included whenever the body was read, including signature rejections. Invalid JSON or invalid UTF-8 produces `payload.parse_error: invalid_json` instead of a raw string. Requests rejected before reading the body, and body-read failures, omit payload properties.
 
-Run `pnpm exec vitest run tests/webhook-logging.test.ts` for a signed-webhook integration check. It verifies the real OTLP export against local HTTP endpoints and prints the captured timing and payload properties.
+Payload logging accepts bodies up to 64 KiB before decoding, paths up to 32 levels below `payload`, and at most 512 fields. Traversal also has a 64 KiB budget for cumulative escaped UTF-8 path bytes and JSON-encoded leaf values, including paths to intermediate containers. This budget bounds expansion before allocating child paths. OTLP framing adds bytes to the exported record. If any limit is exceeded, the log keeps only outcome fields and discards all payload properties. These limits do not change signature verification, forwarding, or analytics.
+
+Run `pnpm exec vitest run tests/webhook-logging.test.ts` for a webhook integration check. It verifies signed forwarding and bounded unsigned-request logs through real OTLP export against local HTTP endpoints, then prints the captured properties and log size.
 
 Create the client once per isolate. After writing each webhook response, the route registers `waitUntil(telemetry.flush())` using [`@vercel/functions`](https://vercel.com/docs/functions/functions-api-reference/vercel-functions-package#waituntil). The handler returns without awaiting telemetry, while the registered promise awaits both `analytics.flush()` and `logs.forceFlush()` to settlement. There is no outer flush timer that abandons an export. The analytics `requestTimeout`, OTLP `timeoutMillis`, and batch processor `exportTimeoutMillis` all use `POSTHOG_FLUSH_TIMEOUT_MS` (2,000 ms). That budget applies per export; queued exports can take longer overall. Vercel still limits background work to the function duration.
 

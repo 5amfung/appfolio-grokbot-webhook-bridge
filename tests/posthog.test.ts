@@ -757,13 +757,6 @@ describe("createBridgeTelemetry", () => {
         Array.from({ length: 200 }, (_, index) => [`field${index}`, index]),
       ),
     };
-    const rawPayload =
-      JSON.stringify(payload).slice(0, -1) +
-      ',"deep":' +
-      '{"child":'.repeat(10_000) +
-      "true" +
-      "}".repeat(10_000) +
-      "}";
     telemetry.captureWebhookHandled(
       {
         kind: "forwarded",
@@ -772,7 +765,7 @@ describe("createBridgeTelemetry", () => {
         upstreamStatus: 200,
         outboundDurationMs: 8.5,
       },
-      new TextEncoder().encode(rawPayload),
+      new TextEncoder().encode(JSON.stringify(payload)),
     );
     await telemetry.flush();
 
@@ -790,7 +783,6 @@ describe("createBridgeTelemetry", () => {
       "payload.empty": [],
       "payload.details\\.urgent": false,
       "payload.fields.field199": 199,
-      [`payload.deep${".child".repeat(10_000)}`]: true,
     });
     expect(records[0]?.droppedAttributesCount).toBe(0);
     expect(records[0]?.attributes).not.toHaveProperty("payload");
@@ -804,6 +796,136 @@ describe("createBridgeTelemetry", () => {
       environment: DEFAULT_DEPLOYMENT_ENVIRONMENT,
       serviceVersion: packageJson.version,
     });
+  });
+
+  it.each([
+    [
+      "raw UTF-8 bytes",
+      JSON.stringify({ description: "한".repeat(22_000) }),
+      0,
+    ],
+    ["body at 64 KiB", "0".padEnd(64 * 1_024), 1],
+    ["body above 64 KiB", "0".padEnd(64 * 1_024 + 1), 0],
+    ["depth at 32", '{"child":'.repeat(32) + "true" + "}".repeat(32), 1],
+    ["depth above 32", '{"child":'.repeat(33) + "true" + "}".repeat(33), 0],
+    [
+      "field count at 512",
+      JSON.stringify(
+        Object.fromEntries(
+          Array.from({ length: 512 }, (_, index) => [`field${index}`, index]),
+        ),
+      ),
+      512,
+    ],
+    [
+      "field count",
+      JSON.stringify(
+        Object.fromEntries(
+          Array.from({ length: 513 }, (_, index) => [`field${index}`, index]),
+        ),
+      ),
+      0,
+    ],
+    [
+      "repeated paths",
+      JSON.stringify({
+        ["x".repeat(1_024)]: Object.fromEntries(
+          Array.from({ length: 100 }, (_, index) => [`field${index}`, index]),
+        ),
+        safe: "discard this too",
+      }),
+      0,
+    ],
+    [
+      "multibyte paths",
+      JSON.stringify({
+        ["한".repeat(128)]: Object.fromEntries(
+          Array.from({ length: 200 }, (_, index) => [`field${index}`, index]),
+        ),
+      }),
+      0,
+    ],
+    [
+      "escaped paths",
+      JSON.stringify({
+        ["\\".repeat(256)]: Object.fromEntries(
+          Array.from({ length: 130 }, (_, index) => [`field${index}`, index]),
+        ),
+      }),
+      0,
+    ],
+    [
+      "combined paths and values",
+      JSON.stringify({
+        ["x".repeat(4_096)]: {
+          first: "a".repeat(28_500),
+          second: "b".repeat(28_500),
+        },
+      }),
+      0,
+    ],
+    [
+      "root value at expanded byte limit",
+      JSON.stringify("a".repeat(65_521)),
+      1,
+    ],
+    [
+      "root value above expanded byte limit",
+      JSON.stringify("a".repeat(65_522)),
+      0,
+    ],
+  ])("bounds payload logging for %s", async (_limit, body, expectedFields) => {
+    const records: ReadableLogRecord[] = [];
+    const capture = vi.fn();
+    const telemetry = track(
+      createBridgeTelemetry(
+        { POSTHOG_PROJECT_KEY: "phc_test_project" },
+        {
+          createAnalyticsClient: () => ({
+            capture,
+            flush: async () => undefined,
+            shutdown: async () => undefined,
+          }),
+          createLogExporter: () => ({
+            export(batch, callback) {
+              records.push(...batch);
+              callback({ code: ExportResultCode.SUCCESS });
+            },
+            shutdown: async () => undefined,
+            forceFlush: async () => undefined,
+          }),
+        },
+      ),
+    );
+    telemetry.captureWebhookHandled(
+      {
+        kind: "unauthorized",
+        family: "bad_signature",
+        reason: "missing_signature",
+        durationMs: 1,
+      },
+      new TextEncoder().encode(body),
+    );
+    await telemetry.flush();
+
+    expect(records).toHaveLength(1);
+    const outcome = {
+      kind: "unauthorized",
+      family: "bad_signature",
+      reason: "missing_signature",
+      durationMs: 1,
+      environment: DEFAULT_DEPLOYMENT_ENVIRONMENT,
+      serviceVersion: packageJson.version,
+    };
+    expect(records[0]?.attributes).toMatchObject(outcome);
+    expect(
+      Object.keys(records[0]?.attributes ?? {}).filter(
+        (key) => key === "payload" || key.startsWith("payload."),
+      ),
+    ).toHaveLength(expectedFields);
+    expect(records[0]?.droppedAttributesCount).toBe(0);
+    expect(capture).toHaveBeenCalledOnce();
+    expect(capture.mock.calls[0]?.[0].properties).toEqual(outcome);
   });
 
   it.each([new TextEncoder().encode("not json"), new Uint8Array([0xff])])(

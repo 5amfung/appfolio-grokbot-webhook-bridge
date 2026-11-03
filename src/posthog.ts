@@ -53,6 +53,11 @@ export const DEFAULT_DEPLOYMENT_ENVIRONMENT = "development";
 
 export const POSTHOG_FLUSH_TIMEOUT_MS = 2_000;
 
+const PAYLOAD_LOG_MAX_BODY_BYTES = 64 * 1_024;
+const PAYLOAD_LOG_MAX_DEPTH = 32;
+const PAYLOAD_LOG_MAX_FIELDS = 512;
+const PAYLOAD_LOG_MAX_EXPANDED_BYTES = 64 * 1_024;
+
 const PACKAGE_VERSION = packageJson.version.trim() || "0.0.0";
 
 const SENSITIVE_KEY =
@@ -348,11 +353,12 @@ function webhookHandledProperties(
   }
 }
 
-/** Parse a logging copy only; verification and forwarding keep the original bytes. */
+/** Bound the logging copy only; verification and forwarding keep the original bytes. */
 function payloadLogProperties(
   rawBody: Uint8Array | undefined,
 ): Record<string, AnyValue> {
   if (rawBody === undefined) return {};
+  if (rawBody.byteLength > PAYLOAD_LOG_MAX_BODY_BYTES) return {};
   let payload: unknown;
   try {
     payload = JSON.parse(
@@ -363,26 +369,50 @@ function payloadLogProperties(
   }
 
   const properties: Record<string, AnyValue> = {};
-  const pending: Array<[path: string, value: unknown]> = [["payload", payload]];
+  const pending = [{ path: "payload", pathBytes: 7, depth: 0, value: payload }];
+  let remainingBytes = PAYLOAD_LOG_MAX_EXPANDED_BYTES - 7;
+  let fieldCount = 0;
   for (let field = pending.pop(); field; field = pending.pop()) {
-    const [path, value] = field;
+    const { path, pathBytes, depth, value } = field;
+    let attributePath = path;
+    let attributeValue: AnyValue;
     if (
       value === null ||
       typeof value === "string" ||
       typeof value === "number" ||
       typeof value === "boolean"
     ) {
-      properties[path === "payload" ? "payload.value" : path] = value;
+      attributeValue = value;
+      if (path === "payload") {
+        attributePath = "payload.value";
+        remainingBytes -= 6;
+      }
     } else if (typeof value === "object") {
       const entries = Object.entries(value);
-      if (entries.length === 0) {
-        properties[path] = Array.isArray(value) ? [] : {};
+      if (entries.length > 0) {
+        if (depth >= PAYLOAD_LOG_MAX_DEPTH) return {};
+        for (const [key, child] of entries) {
+          const escaped = key.replaceAll("\\", "\\\\").replaceAll(".", "\\.");
+          const childPathBytes = pathBytes + 1 + Buffer.byteLength(escaped);
+          if (childPathBytes > remainingBytes) return {};
+          // Charge every path before constructing it, including containers.
+          remainingBytes -= childPathBytes;
+          pending.push({
+            path: `${path}.${escaped}`,
+            pathBytes: childPathBytes,
+            depth: depth + 1,
+            value: child,
+          });
+        }
+        continue;
       }
-      for (const [key, child] of entries) {
-        const escaped = key.replaceAll("\\", "\\\\").replaceAll(".", "\\.");
-        pending.push([`${path}.${escaped}`, child]);
-      }
+      attributeValue = Array.isArray(value) ? [] : {};
+    } else {
+      continue;
     }
+    remainingBytes -= Buffer.byteLength(JSON.stringify(attributeValue));
+    if (remainingBytes < 0 || ++fieldCount > PAYLOAD_LOG_MAX_FIELDS) return {};
+    properties[attributePath] = attributeValue;
   }
   return properties;
 }
@@ -504,12 +534,12 @@ function startLogsPipeline(
     scheduledDelayMillis: config.scheduledDelayMillis,
   });
   const processor = new PrivacyLogRecordProcessor(batch);
-  // A logs-only provider avoids HTTP auto-instrumentation and lets every
-  // payload property survive the SDK's default 128-attribute limit.
+  // Keep bounded payload fields and outcome metadata above the SDK's default
+  // 128-attribute limit, with a finite fallback limit for other logger calls.
   const provider = new LoggerProvider({
     resource: resourceFromAttributes(config.resourceAttributes),
     processors: [processor],
-    logRecordLimits: { attributeCountLimit: Infinity },
+    logRecordLimits: { attributeCountLimit: 1_024 },
   });
   // These API versions use separate globals. Both must use this provider.
   documentedLogs.disable();

@@ -11,7 +11,7 @@ import { createBridgeTelemetry } from "../src/posthog.js";
 
 vi.mock("@vercel/functions", () => ({ waitUntil: vi.fn() }));
 
-it("exports the forwarded payload and separate outbound timing through real HTTP", async () => {
+it("exports forwarded payloads and bounds unsigned request logs through real HTTP", async () => {
   const payload =
     '{\n  "client_id": "proof-client", "event_id": "proof-event-001",\n  "topic": "work_order_updates", "description": "싱크대 누수",\n  "photo_url": "https://example.test/photo",\n  "details": { "priority": 2, "urgent": true }\n}\n';
   const rawBody = Buffer.from(payload, "utf8");
@@ -172,6 +172,50 @@ it("exports the forwarded payload and separate outbound timing through real HTTP
         ...log.attributes,
         forwardedPayloadMatches: forwarded?.equals(rawBody),
         analyticsContainsPayload: analyticsText.includes('"payload.'),
+      }),
+    );
+
+    const rejectedBody = Buffer.from(
+      '{"leaf":0,"child":'.repeat(2_000) + "0" + "}".repeat(2_000),
+    );
+    expect(rejectedBody.byteLength).toBe(38_001);
+    const unsigned = Object.assign(Readable.from([rejectedBody]), {
+      method: "POST",
+      headers: {},
+    });
+    statusCode = 0;
+    headersSent = false;
+    vi.mocked(waitUntil).mockClear();
+    await handleWebhookRequest(
+      unsigned as unknown as VercelRequest,
+      res as unknown as VercelResponse,
+      telemetry,
+    );
+    expect(statusCode).toBe(401);
+    expect(waitUntil).toHaveBeenCalledOnce();
+    await vi.mocked(waitUntil).mock.calls[0]?.[0];
+
+    const rejectedLogPosts = ingested.filter(
+      (entry) => entry.path === "/i/v1/logs",
+    );
+    expect(rejectedLogPosts).toHaveLength(2);
+    const rejectedLogBody = rejectedLogPosts[1]?.body ?? "";
+    expect(Buffer.byteLength(rejectedLogBody)).toBeLessThan(2_048);
+    expect(readLog(rejectedLogBody).attributes).toEqual({
+      kind: "unauthorized",
+      family: "bad_signature",
+      reason: "missing_signature",
+      durationMs: expect.any(Number),
+      environment: "test",
+      serviceVersion: "logging-proof",
+    });
+    expect(errors).toEqual([]);
+    console.log(
+      "BOUNDED_UNSIGNED_LOG_EVIDENCE",
+      JSON.stringify({
+        requestBytes: rejectedBody.byteLength,
+        logBytes: Buffer.byteLength(rejectedLogBody),
+        statusCode,
       }),
     );
   } finally {
