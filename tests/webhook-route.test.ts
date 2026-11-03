@@ -11,6 +11,7 @@ import {
 } from "jose";
 import { handleWebhookRequest } from "../api/webhooks/appfolio.js";
 import { handleAppfolioWebhook } from "../src/handle-appfolio-webhook.js";
+import appfolioWebhook from "./fixtures/appfolio-work-order-webhook.json" with { type: "json" };
 
 vi.mock("@vercel/functions", () => ({ waitUntil: vi.fn() }));
 
@@ -38,17 +39,7 @@ async function signDetached(rawBody: Uint8Array) {
 }
 
 describe("handleAppfolioWebhook (route logic, mocked upstream)", () => {
-  const rawBody = new TextEncoder().encode(
-    JSON.stringify({
-      client_id: "c1",
-      event_id: "e1",
-      topic: "work_order_updates",
-      resource_id: "r1",
-      event_timestamp: "2023-03-27T16:55:12Z",
-      message_sent_at: "2023-08-28T23:18:27Z",
-      event_type: "updated",
-    }),
-  );
+  const rawBody = new TextEncoder().encode(JSON.stringify(appfolioWebhook));
 
   it("returns unauthorized when signature is invalid", async () => {
     const { jwks } = await signDetached(rawBody);
@@ -82,7 +73,11 @@ describe("handleAppfolioWebhook (route logic, mocked upstream)", () => {
       fetchImpl,
     });
 
-    expect(outcome).toEqual({ kind: "forwarded", upstreamStatus: 200 });
+    expect(outcome).toEqual({
+      kind: "forwarded",
+      upstreamStatus: 200,
+      outboundDurationMs: expect.any(Number),
+    });
     expect(fetchImpl).toHaveBeenCalledOnce();
   });
 
@@ -103,6 +98,7 @@ describe("handleAppfolioWebhook (route logic, mocked upstream)", () => {
       kind: "upstream_failure",
       error: "upstream returned 500",
       upstreamStatus: 500,
+      outboundDurationMs: expect.any(Number),
     });
   });
 
@@ -123,6 +119,7 @@ describe("handleAppfolioWebhook (route logic, mocked upstream)", () => {
       kind: "upstream_failure",
       error: "network down",
       failure: "other",
+      outboundDurationMs: expect.any(Number),
     });
   });
 
@@ -142,13 +139,7 @@ describe("handleAppfolioWebhook (route logic, mocked upstream)", () => {
 const WEBHOOK_URL = "https://bot.example/hook";
 
 describe("handleWebhookRequest", () => {
-  const rawBody = new TextEncoder().encode(
-    JSON.stringify({
-      client_id: "c1",
-      event_id: "e1",
-      topic: "work_order_updates",
-    }),
-  );
+  const rawBody = new TextEncoder().encode(JSON.stringify(appfolioWebhook));
 
   async function signedRequest(body: Uint8Array, kid: string) {
     const { publicKey, privateKey } = await generateKeyPair("PS256", {
@@ -290,6 +281,7 @@ describe("handleWebhookRequest", () => {
       family: "bad_signature",
       reason: "signature_invalid",
     });
+    expect(seen.captureWebhookHandled.mock.calls[0]?.[1]).toEqual(tampered);
     expect(JSON.stringify(seen.captureWebhookHandled.mock.calls)).not.toContain(
       "signature verification failed",
     );
@@ -365,7 +357,9 @@ describe("handleWebhookRequest", () => {
       kind: "forwarded",
       reason: "forwarded",
       upstreamStatus: 200,
+      outboundDurationMs: expect.any(Number),
     });
+    expect(seen.captureWebhookHandled.mock.calls[0]?.[1]).toEqual(rawBody);
   });
 
   it("returns 502 and records upstreamStatus 500", async () => {
@@ -398,6 +392,7 @@ describe("handleWebhookRequest", () => {
       kind: "upstream_failure",
       reason: "upstream_http_error",
       upstreamStatus: 500,
+      outboundDurationMs: expect.any(Number),
     });
     expect(JSON.stringify(seen.captureWebhookHandled.mock.calls)).not.toContain(
       "upstream returned 500",
@@ -438,6 +433,7 @@ describe("handleWebhookRequest", () => {
       kind: "upstream_failure",
       reason: "upstream_fetch_failed",
       failure: "connection_refused",
+      outboundDurationMs: expect.any(Number),
     });
     expect(JSON.stringify(seen.captureWebhookHandled.mock.calls)).not.toContain(
       "bot.example",
@@ -572,6 +568,7 @@ describe("handleWebhookRequest", () => {
       kind: "body_read_failed",
       reason: "body_read_failed",
     });
+    expect(seen.captureWebhookHandled.mock.calls[0]?.[1]).toBeUndefined();
     expect(JSON.stringify(seen.captureWebhookHandled.mock.calls)).not.toContain(
       "secret.example",
     );

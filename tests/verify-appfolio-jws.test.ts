@@ -7,6 +7,7 @@ import {
   type JWK,
 } from "jose";
 import { verifyAppfolioJws } from "../src/verify-appfolio-jws.js";
+import appfolioWebhook from "./fixtures/appfolio-work-order-webhook.json" with { type: "json" };
 
 async function makePs256Fixture(payload: Uint8Array) {
   const { publicKey, privateKey } = await generateKeyPair("PS256", {
@@ -29,15 +30,7 @@ async function makePs256Fixture(payload: Uint8Array) {
 }
 
 describe("verifyAppfolioJws", () => {
-  const bodyText = JSON.stringify({
-    client_id: "example_id",
-    event_id: "evt-1",
-    topic: "work_order_updates",
-    resource_id: "res-1",
-    event_timestamp: "2023-03-27T16:55:12Z",
-    message_sent_at: "2023-08-28T23:18:27Z",
-    event_type: "updated",
-  });
+  const bodyText = JSON.stringify(appfolioWebhook);
   const rawBody = new TextEncoder().encode(bodyText);
 
   it("accepts a valid detached PS256 JWS over raw body bytes", async () => {
@@ -159,8 +152,8 @@ describe("verifyAppfolioJws", () => {
 
   it("does not depend on JSON re-stringify (whitespace-sensitive)", async () => {
     // Sign compact JSON; verify with same bytes — not a pretty-printed variant.
-    const compactJson = '{"a":1,"b":2}';
-    const pretty = '{\n  "a": 1,\n  "b": 2\n}';
+    const compactJson = JSON.stringify(appfolioWebhook);
+    const pretty = JSON.stringify(appfolioWebhook, null, 2);
     const signedBytes = new TextEncoder().encode(compactJson);
     const prettyBytes = new TextEncoder().encode(pretty);
     const { detached, jwks } = await makePs256Fixture(signedBytes);

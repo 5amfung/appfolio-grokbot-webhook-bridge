@@ -2,6 +2,7 @@ import type { IncomingMessage } from "node:http";
 import { PassThrough, Readable } from "node:stream";
 import { describe, expect, it } from "vitest";
 import { readRawBody } from "../src/raw-body.js";
+import appfolioWebhook from "./fixtures/appfolio-work-order-webhook.json" with { type: "json" };
 
 /**
  * Mirrors @vercel/node's dev-server restoreBody: the helper consumes the
@@ -24,16 +25,14 @@ function restoreLikeVercelDev(req: Readable, body: Buffer): void {
 
 describe("readRawBody", () => {
   it("reads a stream that has not been consumed", async () => {
-    const payload = Buffer.from('{"a":1, "b":2}');
+    const payload = Buffer.from(JSON.stringify(appfolioWebhook, null, 2));
     const req = Readable.from([payload]);
     const raw = await readRawBody(req as unknown as IncomingMessage);
     expect(Buffer.from(raw)).toEqual(payload);
   });
 
   it("reads bytes replayed on data/end after vercel dev consumed the stream", async () => {
-    const payload = Buffer.from(
-      '{"client_id":"verify-client", "event_id":"x"}',
-    );
+    const payload = Buffer.from(JSON.stringify(appfolioWebhook));
     const req = Readable.from([payload]);
     const drained: Buffer[] = [];
     for await (const chunk of req) {

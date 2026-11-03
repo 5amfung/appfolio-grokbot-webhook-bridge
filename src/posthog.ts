@@ -14,24 +14,27 @@
  * exceptions and unhandled rejections are autocaptured. Handled failures
  * go through `captureException` so they still pass `before_send`.
  *
- * PRIVACY: payloads are AppFolio property-management data (tenants,
- * addresses, money). Never send the request body, headers, signature,
- * bearer token, upstream URL, or any payload field. Console log
- * autocapture is off for the same reason. Every capture uses
+ * Webhook logs include JSON payload fields as `payload.*` attributes.
+ * Analytics and exceptions exclude payloads. Transport headers, signatures,
+ * bearer tokens, and upstream URLs remain excluded from telemetry.
+ * Console log autocapture is off. Every analytics capture uses
  * `POSTHOG_DISTINCT_ID` and `$process_person_profile: false`.
  */
 import { logs as otelLogs } from "@opentelemetry/api";
 import { logs as documentedLogs } from "@opentelemetry/api-logs";
-import type { LoggerProvider as DocumentedLoggerProvider } from "@opentelemetry/api-logs";
+import type {
+  AnyValue,
+  LoggerProvider as DocumentedLoggerProvider,
+} from "@opentelemetry/api-logs";
 import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
 import { resourceFromAttributes } from "@opentelemetry/resources";
 import {
   BatchLogRecordProcessor,
+  LoggerProvider,
   type LogRecordExporter,
   type LogRecordProcessor,
   type ReadWriteLogRecord,
 } from "@opentelemetry/sdk-logs";
-import { NodeSDK } from "@opentelemetry/sdk-node";
 import { PostHog, type EventMessage, type PostHogOptions } from "posthog-node";
 import packageJson from "../package.json" with { type: "json" };
 import type { ConfigReason } from "./config.js";
@@ -49,6 +52,11 @@ export const DEFAULT_POSTHOG_HOST = "https://us.i.posthog.com";
 export const DEFAULT_DEPLOYMENT_ENVIRONMENT = "development";
 
 export const POSTHOG_FLUSH_TIMEOUT_MS = 2_000;
+
+const PAYLOAD_LOG_MAX_BODY_BYTES = 64 * 1_024;
+const PAYLOAD_LOG_MAX_DEPTH = 32;
+const PAYLOAD_LOG_MAX_FIELDS = 512;
+const PAYLOAD_LOG_MAX_EXPANDED_BYTES = 64 * 1_024;
 
 const PACKAGE_VERSION = packageJson.version.trim() || "0.0.0";
 
@@ -89,18 +97,21 @@ export type WebhookHandledEvent =
       reason: "forwarded";
       durationMs: number;
       upstreamStatus: number;
+      outboundDurationMs: number;
     }
   | {
       kind: "upstream_failure";
       durationMs: number;
       reason: "upstream_http_error";
       upstreamStatus: number;
+      outboundDurationMs: number;
     }
   | {
       kind: "upstream_failure";
       durationMs: number;
       reason: "upstream_fetch_failed";
       failure: UpstreamFetchFailure;
+      outboundDurationMs: number;
     };
 
 export type BridgeTelemetry = {
@@ -116,9 +127,10 @@ export type BridgeTelemetry = {
   captureException(error: unknown, source: ExceptionSource): void;
   /**
    * Queue one `webhook_handled` analytics event and one log record.
+   * Only the log includes JSON fields from rawBody as `payload.*` attributes.
    * Never throws and does not flush.
    */
-  captureWebhookHandled(event: WebhookHandledEvent): void;
+  captureWebhookHandled(event: WebhookHandledEvent, rawBody?: Uint8Array): void;
   /**
    * Send queued analytics events and log records. Never throws.
    * Register the returned promise with `waitUntil()` before the handler returns.
@@ -176,7 +188,7 @@ export type BridgeTelemetryDeps = {
     options: PostHogOptions,
   ) => AnalyticsClient;
   /**
-   * Replaces the OTLP/HTTP exporter. The Node SDK, resource, and batch
+   * Replaces the OTLP/HTTP exporter. The logger provider, resource, and batch
    * processor still start. Tests use this to observe records without the network.
    */
   createLogExporter?: (options: LogExporterOptions) => LogRecordExporter;
@@ -236,7 +248,7 @@ export function createBridgeTelemetry(
         // Telemetry must not change the HTTP status AppFolio sees.
       }
     },
-    captureWebhookHandled(event) {
+    captureWebhookHandled(event, rawBody) {
       const properties = {
         ...webhookHandledProperties(event),
         environment,
@@ -246,7 +258,7 @@ export function createBridgeTelemetry(
         documentedLogs.getLogger(POSTHOG_SERVICE_NAME, PACKAGE_VERSION).emit({
           severityText: "info",
           body: WEBHOOK_HANDLED_EVENT,
-          attributes: properties,
+          attributes: { ...properties, ...payloadLogProperties(rawBody) },
         });
       } catch {
         // A log export failure must not prevent analytics capture.
@@ -309,6 +321,7 @@ function webhookHandledProperties(
         reason: event.reason,
         durationMs: event.durationMs,
         upstreamStatus: event.upstreamStatus,
+        outboundDurationMs: event.outboundDurationMs,
       };
     case "upstream_failure":
       switch (event.reason) {
@@ -318,6 +331,7 @@ function webhookHandledProperties(
             reason: event.reason,
             durationMs: event.durationMs,
             failure: event.failure,
+            outboundDurationMs: event.outboundDurationMs,
           };
         case "upstream_http_error":
           return {
@@ -325,6 +339,7 @@ function webhookHandledProperties(
             reason: event.reason,
             durationMs: event.durationMs,
             upstreamStatus: event.upstreamStatus,
+            outboundDurationMs: event.outboundDurationMs,
           };
         default: {
           const unexpected: never = event;
@@ -336,6 +351,70 @@ function webhookHandledProperties(
       return unexpected;
     }
   }
+}
+
+/** Bound the logging copy only; verification and forwarding keep the original bytes. */
+function payloadLogProperties(
+  rawBody: Uint8Array | undefined,
+): Record<string, AnyValue> {
+  if (rawBody === undefined) return {};
+  if (rawBody.byteLength > PAYLOAD_LOG_MAX_BODY_BYTES) return {};
+  let payload: unknown;
+  try {
+    payload = JSON.parse(
+      new TextDecoder("utf-8", { fatal: true }).decode(rawBody),
+    );
+  } catch {
+    return { "payload.parse_error": "invalid_json" };
+  }
+
+  const properties: Record<string, AnyValue> = {};
+  const pending = [{ path: "payload", pathBytes: 7, depth: 0, value: payload }];
+  let remainingBytes = PAYLOAD_LOG_MAX_EXPANDED_BYTES - 7;
+  let fieldCount = 0;
+  for (let field = pending.pop(); field; field = pending.pop()) {
+    const { path, pathBytes, depth, value } = field;
+    let attributePath = path;
+    let attributeValue: AnyValue;
+    if (
+      value === null ||
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean"
+    ) {
+      attributeValue = value;
+      if (path === "payload") {
+        attributePath = "payload.value";
+        remainingBytes -= 6;
+      }
+    } else if (typeof value === "object") {
+      const entries = Object.entries(value);
+      if (entries.length > 0) {
+        if (depth >= PAYLOAD_LOG_MAX_DEPTH) return {};
+        for (const [key, child] of entries) {
+          const escaped = key.replaceAll("\\", "\\\\").replaceAll(".", "\\.");
+          const childPathBytes = pathBytes + 1 + Buffer.byteLength(escaped);
+          if (childPathBytes > remainingBytes) return {};
+          // Charge every path before constructing it, including containers.
+          remainingBytes -= childPathBytes;
+          pending.push({
+            path: `${path}.${escaped}`,
+            pathBytes: childPathBytes,
+            depth: depth + 1,
+            value: child,
+          });
+        }
+        continue;
+      }
+      attributeValue = Array.isArray(value) ? [] : {};
+    } else {
+      continue;
+    }
+    remainingBytes -= Buffer.byteLength(JSON.stringify(attributeValue));
+    if (remainingBytes < 0 || ++fieldCount > PAYLOAD_LOG_MAX_FIELDS) return {};
+    properties[attributePath] = attributeValue;
+  }
+  return properties;
 }
 
 function disabledTelemetry(
@@ -455,30 +534,23 @@ function startLogsPipeline(
     scheduledDelayMillis: config.scheduledDelayMillis,
   });
   const processor = new PrivacyLogRecordProcessor(batch);
-  // Disable traces, metrics, resource detectors, and instrumentations.
-  // NodeSDK would otherwise export them from OTEL_* env defaults, and
-  // auto-instrumentation can copy HTTP headers and bodies.
-  const sdk = new NodeSDK({
-    autoDetectResources: false,
+  // Keep bounded payload fields and outcome metadata above the SDK's default
+  // 128-attribute limit, with a finite fallback limit for other logger calls.
+  const provider = new LoggerProvider({
     resource: resourceFromAttributes(config.resourceAttributes),
-    logRecordProcessors: [processor],
-    instrumentations: [],
-    metricReaders: [],
-    spanProcessors: [],
+    processors: [processor],
+    logRecordLimits: { attributeCountLimit: 1_024 },
   });
-  // sdk-node 0.300 registers its provider on `@opentelemetry/api` logs.
-  // The Node logs guide imports `logs` from `@opentelemetry/api-logs`, a
-  // separate global. Clear both, start the SDK, then install that provider
-  // on the documented API. Registration keeps the first provider.
+  // These API versions use separate globals. Both must use this provider.
   documentedLogs.disable();
   otelLogs.disable();
   try {
-    sdk.start();
+    otelLogs.setGlobalLoggerProvider(provider);
     documentedLogs.setGlobalLoggerProvider(
-      otelLogs.getLoggerProvider() as unknown as DocumentedLoggerProvider,
+      provider as unknown as DocumentedLoggerProvider,
     );
   } catch (error) {
-    void sdk.shutdown();
+    void provider.shutdown();
     documentedLogs.disable();
     otelLogs.disable();
     throw error;
@@ -487,7 +559,7 @@ function startLogsPipeline(
     forceFlush: () => processor.forceFlush(),
     async shutdown() {
       try {
-        await sdk.shutdown();
+        await provider.shutdown();
       } finally {
         documentedLogs.disable();
         otelLogs.disable();
@@ -548,6 +620,14 @@ class PrivacyLogRecordProcessor implements LogRecordProcessor {
 function scrubLogRecord(record: ReadWriteLogRecord): void {
   const attributes = record.attributes as Record<string, unknown>;
   for (const key of Object.keys(attributes)) {
+    // Payload fields are explicitly included only on the bridge's webhook log.
+    if (
+      record.body === WEBHOOK_HANDLED_EVENT &&
+      record.instrumentationScope.name === POSTHOG_SERVICE_NAME &&
+      (key === "payload" || key.startsWith("payload."))
+    ) {
+      continue;
+    }
     if (isSensitiveKey(key)) {
       delete attributes[key];
       continue;

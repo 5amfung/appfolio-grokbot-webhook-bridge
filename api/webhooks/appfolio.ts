@@ -41,9 +41,17 @@ type PendingWebhook =
   | { kind: "body_read_failed" }
   | { kind: "unexpected" }
   | { kind: "unauthorized"; classification: VerifyClassification }
-  | { kind: "forwarded"; upstreamStatus: number }
-  | { kind: "upstream_failure"; upstreamStatus: number }
-  | { kind: "upstream_failure"; failure: UpstreamFetchFailure };
+  | { kind: "forwarded"; upstreamStatus: number; outboundDurationMs: number }
+  | {
+      kind: "upstream_failure";
+      upstreamStatus: number;
+      outboundDurationMs: number;
+    }
+  | {
+      kind: "upstream_failure";
+      failure: UpstreamFetchFailure;
+      outboundDurationMs: number;
+    };
 
 function bridgeTelemetry(): BridgeTelemetry {
   telemetry ??= createBridgeTelemetry();
@@ -80,6 +88,7 @@ export async function handleWebhookRequest(
 ): Promise<void> {
   const started = Date.now();
   let pending: PendingWebhook = { kind: "unexpected" };
+  let rawBody: Uint8Array | undefined;
   try {
     if (req.method !== "POST") {
       pending = { kind: "method_not_allowed" };
@@ -99,7 +108,6 @@ export async function handleWebhookRequest(
       return;
     }
 
-    let rawBody: Uint8Array;
     try {
       rawBody = await readRawBody(req);
     } catch (err) {
@@ -128,6 +136,7 @@ export async function handleWebhookRequest(
         pending = {
           kind: "forwarded",
           upstreamStatus: outcome.upstreamStatus,
+          outboundDurationMs: outcome.outboundDurationMs,
         };
         res.status(200).json({
           ok: true,
@@ -140,8 +149,13 @@ export async function handleWebhookRequest(
             ? {
                 kind: "upstream_failure",
                 upstreamStatus: outcome.upstreamStatus,
+                outboundDurationMs: outcome.outboundDurationMs,
               }
-            : { kind: "upstream_failure", failure: outcome.failure };
+            : {
+                kind: "upstream_failure",
+                failure: outcome.failure,
+                outboundDurationMs: outcome.outboundDurationMs,
+              };
         res.status(502).json({ error: outcome.error });
         return;
       default: {
@@ -155,7 +169,7 @@ export async function handleWebhookRequest(
       res.status(500).json({ error: "internal error" });
     }
   } finally {
-    telemetry.captureWebhookHandled(toHandledEvent(pending, started));
+    telemetry.captureWebhookHandled(toHandledEvent(pending, started), rawBody);
     waitUntil(telemetry.flush());
   }
 }
@@ -190,6 +204,7 @@ function toHandledEvent(
         reason: "forwarded",
         durationMs,
         upstreamStatus: pending.upstreamStatus,
+        outboundDurationMs: pending.outboundDurationMs,
       };
     case "upstream_failure":
       if ("upstreamStatus" in pending) {
@@ -198,6 +213,7 @@ function toHandledEvent(
           reason: "upstream_http_error",
           durationMs,
           upstreamStatus: pending.upstreamStatus,
+          outboundDurationMs: pending.outboundDurationMs,
         };
       }
       return {
@@ -205,6 +221,7 @@ function toHandledEvent(
         reason: "upstream_fetch_failed",
         durationMs,
         failure: pending.failure,
+        outboundDurationMs: pending.outboundDurationMs,
       };
     default: {
       const unexpected: never = pending;
