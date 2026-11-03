@@ -57,7 +57,8 @@ export async function forwardToGrokBot(
       error: `upstream returned ${status}`,
     };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "upstream fetch failed";
+    const message =
+      err instanceof Error ? err.message : "upstream fetch failed";
     return {
       ok: false,
       error: message,

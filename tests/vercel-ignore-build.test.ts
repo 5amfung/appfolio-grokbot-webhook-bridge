@@ -67,7 +67,8 @@ describe("Vercel ignore build", () => {
     expect(
       ignoreStatus({
         VERCEL_ENV: "production",
-        VERCEL_GIT_COMMIT_MESSAGE: "chore(main): release 1.2.3 (#12)\r\n\r\nnotes",
+        VERCEL_GIT_COMMIT_MESSAGE:
+          "chore(main): release 1.2.3 (#12)\r\n\r\nnotes",
       }),
     ).toBe(1);
   });

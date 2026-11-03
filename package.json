@@ -9,6 +9,10 @@
   },
   "packageManager": "pnpm@11.24.0",
   "scripts": {
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "pnpm run lint --fix",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -25,10 +29,15 @@
     "posthog-node": "5.61.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@opentelemetry/core": "3.0.0",
     "@types/node": "^24.19.2",
     "@vercel/node": "^5.1.14",
+    "eslint": "^10.14.0",
+    "globals": "^17.14.0",
+    "prettier": "3.9.10",
     "typescript": "^5.8.3",
+    "typescript-eslint": "^8.72.1",
     "vitest": "^3.1.2"
   }
 }

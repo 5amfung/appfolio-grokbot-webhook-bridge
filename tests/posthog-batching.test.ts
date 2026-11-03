@@ -1,11 +1,11 @@
 import { logs } from "@opentelemetry/api-logs";
 import { ExportResultCode } from "@opentelemetry/core";
-import type { LogRecordExporter, ReadableLogRecord } from "@opentelemetry/sdk-logs";
+import type {
+  LogRecordExporter,
+  ReadableLogRecord,
+} from "@opentelemetry/sdk-logs";
 import { describe, expect, it, vi } from "vitest";
-import {
-  createBridgeTelemetry,
-  POSTHOG_SERVICE_NAME,
-} from "../src/posthog.js";
+import { createBridgeTelemetry, POSTHOG_SERVICE_NAME } from "../src/posthog.js";
 
 const analytics = () => ({
   flush: async () => undefined,

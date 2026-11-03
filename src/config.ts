@@ -40,9 +40,7 @@ export function classifyConfigError(err: unknown): {
   return { message: MISCONFIGURED, reason: "config_misconfigured" };
 }
 
-export function loadConfig(
-  env: NodeJS.ProcessEnv = process.env,
-): BridgeConfig {
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): BridgeConfig {
   const webhook = env.GROK_BOT_WEBHOOK_URL;
   const token = env.GROK_BOT_BEARER_TOKEN;
   if (!webhook) {
