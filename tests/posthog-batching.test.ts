@@ -38,6 +38,7 @@ describe("log flush batching", () => {
             reason: "forwarded",
             durationMs,
             upstreamStatus: 200,
+            outboundDurationMs: 0.5,
             body: '{"tenant":"AdaTenant991"}',
             authorization: "Bearer crsr_private",
             signature: "private-signature",
@@ -55,6 +56,7 @@ describe("log flush batching", () => {
           reason: "forwarded",
           durationMs,
           upstreamStatus: 200,
+          outboundDurationMs: 0.5,
         })),
       );
       expect(
@@ -99,6 +101,7 @@ describe("log flush batching", () => {
         reason: "forwarded",
         durationMs: 1,
         upstreamStatus: 200,
+        outboundDurationMs: 0.5,
       });
       const first = telemetry.flush().then(() => {
         firstSettled = true;
@@ -110,6 +113,7 @@ describe("log flush batching", () => {
         reason: "forwarded",
         durationMs: 2,
         upstreamStatus: 204,
+        outboundDurationMs: 0.5,
       });
       const second = telemetry.flush().then(() => {
         secondSettled = true;

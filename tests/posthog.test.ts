@@ -226,6 +226,7 @@ describe("createBridgeTelemetry", () => {
       properties: {
         kind: "forwarded",
         upstreamStatus: 200,
+        outboundDurationMs: 0.5,
         durationMs: 12,
         reason: "verify failed https://bot.example/hook bearer crsr_secret",
         $process_person_profile: true,
@@ -243,6 +244,7 @@ describe("createBridgeTelemetry", () => {
     expect(event?.properties).toMatchObject({
       kind: "forwarded",
       upstreamStatus: 200,
+      outboundDurationMs: 0.5,
       durationMs: 12,
       $process_person_profile: false,
       reason: "verify failed [redacted-url] bearer [redacted]",
@@ -439,6 +441,7 @@ describe("createBridgeTelemetry", () => {
       reason: "forwarded",
       durationMs: 3,
       upstreamStatus: 204,
+      outboundDurationMs: 0.5,
     });
     expect(capture).toHaveBeenCalledWith({
       event: "webhook_handled",
@@ -448,6 +451,7 @@ describe("createBridgeTelemetry", () => {
         reason: "forwarded",
         durationMs: 3,
         upstreamStatus: 204,
+        outboundDurationMs: 0.5,
         environment: "production",
         serviceVersion: "abc123",
       },
@@ -457,6 +461,7 @@ describe("createBridgeTelemetry", () => {
       reason: "upstream_fetch_failed",
       durationMs: 4,
       failure: "dns",
+      outboundDurationMs: 0.5,
     });
     expect(capture).toHaveBeenLastCalledWith({
       event: "webhook_handled",
@@ -466,6 +471,7 @@ describe("createBridgeTelemetry", () => {
         reason: "upstream_fetch_failed",
         durationMs: 4,
         failure: "dns",
+        outboundDurationMs: 0.5,
         environment: "production",
         serviceVersion: "abc123",
       },
@@ -663,6 +669,7 @@ describe("createBridgeTelemetry", () => {
       attributes: {
         kind: "forwarded",
         upstreamStatus: 502,
+        outboundDurationMs: 0.5,
         body: '{"tenant":"Ada"}',
         authorization: "Bearer crsr_live",
         signature: "aaaa.bbbb",
@@ -677,6 +684,7 @@ describe("createBridgeTelemetry", () => {
     expect(record?.attributes).toMatchObject({
       kind: "forwarded",
       upstreamStatus: 502,
+      outboundDurationMs: 0.5,
     });
     expect(record?.attributes).not.toHaveProperty("body");
     expect(record?.attributes).not.toHaveProperty("authorization");
@@ -713,6 +721,134 @@ describe("createBridgeTelemetry", () => {
     }
   });
 
+  it("exports payload fields as typed log properties without adding them to analytics", async () => {
+    const records: ReadableLogRecord[] = [];
+    const capture = vi.fn();
+    const telemetry = track(
+      createBridgeTelemetry(
+        { POSTHOG_PROJECT_KEY: "phc_test_project" },
+        {
+          createAnalyticsClient: () => ({
+            capture,
+            flush: async () => undefined,
+            shutdown: async () => undefined,
+          }),
+          createLogExporter: () => ({
+            export(batch, callback) {
+              records.push(...batch);
+              callback({ code: ExportResultCode.SUCCESS });
+            },
+            shutdown: async () => undefined,
+            forceFlush: async () => undefined,
+          }),
+        },
+      ),
+    );
+    const payload = {
+      event_id: "e1",
+      resource_id: 42,
+      kind: "updated",
+      details: { urgent: true, description: "수도꼭지 누수" },
+      attachments: [{ url: "https://files.example/photo.jpg" }],
+      optional: null,
+      empty: [],
+      "details.urgent": false,
+      fields: Object.fromEntries(
+        Array.from({ length: 200 }, (_, index) => [`field${index}`, index]),
+      ),
+    };
+    const rawPayload =
+      JSON.stringify(payload).slice(0, -1) +
+      ',"deep":' +
+      '{"child":'.repeat(10_000) +
+      "true" +
+      "}".repeat(10_000) +
+      "}";
+    telemetry.captureWebhookHandled(
+      {
+        kind: "forwarded",
+        reason: "forwarded",
+        durationMs: 12,
+        upstreamStatus: 200,
+        outboundDurationMs: 8.5,
+      },
+      new TextEncoder().encode(rawPayload),
+    );
+    await telemetry.flush();
+
+    expect(records).toHaveLength(1);
+    expect(records[0]?.attributes).toMatchObject({
+      kind: "forwarded",
+      outboundDurationMs: 8.5,
+      "payload.event_id": "e1",
+      "payload.resource_id": 42,
+      "payload.kind": "updated",
+      "payload.details.urgent": true,
+      "payload.details.description": "수도꼭지 누수",
+      "payload.attachments.0.url": "https://files.example/photo.jpg",
+      "payload.optional": null,
+      "payload.empty": [],
+      "payload.details\\.urgent": false,
+      "payload.fields.field199": 199,
+      [`payload.deep${".child".repeat(10_000)}`]: true,
+    });
+    expect(records[0]?.droppedAttributesCount).toBe(0);
+    expect(records[0]?.attributes).not.toHaveProperty("payload");
+    expect(capture).toHaveBeenCalledOnce();
+    expect(capture.mock.calls[0]?.[0].properties).toEqual({
+      kind: "forwarded",
+      reason: "forwarded",
+      durationMs: 12,
+      upstreamStatus: 200,
+      outboundDurationMs: 8.5,
+      environment: DEFAULT_DEPLOYMENT_ENVIRONMENT,
+      serviceVersion: packageJson.version,
+    });
+  });
+
+  it.each([new TextEncoder().encode("not json"), new Uint8Array([0xff])])(
+    "keeps the outcome log when its payload cannot be parsed",
+    async (rawBody) => {
+      const records: ReadableLogRecord[] = [];
+      const telemetry = track(
+        createBridgeTelemetry(
+          { POSTHOG_PROJECT_KEY: "phc_test_project" },
+          {
+            createAnalyticsClient: () => ({
+              flush: async () => undefined,
+              shutdown: async () => undefined,
+            }),
+            createLogExporter: () => ({
+              export(batch, callback) {
+                records.push(...batch);
+                callback({ code: ExportResultCode.SUCCESS });
+              },
+              shutdown: async () => undefined,
+              forceFlush: async () => undefined,
+            }),
+          },
+        ),
+      );
+      telemetry.captureWebhookHandled(
+        {
+          kind: "unauthorized",
+          family: "bad_signature",
+          reason: "missing_signature",
+          durationMs: 1,
+        },
+        rawBody,
+      );
+      await telemetry.flush();
+
+      expect(records).toHaveLength(1);
+      expect(records[0]?.attributes).toMatchObject({
+        kind: "unauthorized",
+        "payload.parse_error": "invalid_json",
+      });
+      expect(records[0]?.attributes).not.toHaveProperty("outboundDurationMs");
+    },
+  );
+
   it("posts one scrubbed webhook log from captureWebhookHandled", async () => {
     const tenantPayload = '{"tenant":"AdaTenant991","address":"1 Main St"}';
     const ingest = await startIngest(0);
@@ -733,6 +869,7 @@ describe("createBridgeTelemetry", () => {
         reason: "forwarded",
         durationMs: 12,
         upstreamStatus: 200,
+        outboundDurationMs: 0.5,
       });
       await telemetry.flush();
       const posts = ingest.seen.filter((entry) => entry.url === "/i/v1/logs");
@@ -749,6 +886,7 @@ describe("createBridgeTelemetry", () => {
         reason: "forwarded",
         durationMs: 12,
         upstreamStatus: 200,
+        outboundDurationMs: 0.5,
         environment: "production",
         serviceVersion: "deadbeef",
       });
@@ -786,6 +924,7 @@ describe("createBridgeTelemetry", () => {
         reason: "forwarded",
         durationMs: 12,
         upstreamStatus: 200,
+        outboundDurationMs: 0.5,
       });
       await telemetry.flush();
       const analyticsPosts = ingest.seen.filter(
@@ -803,6 +942,7 @@ describe("createBridgeTelemetry", () => {
           kind: "forwarded",
           reason: "forwarded",
           upstreamStatus: 200,
+          outboundDurationMs: 0.5,
           durationMs: 12,
           environment: "production",
           serviceVersion: "deadbeef",
@@ -899,7 +1039,11 @@ function otlpLogRecord(body: string): {
           body?: { stringValue?: string };
           attributes?: Array<{
             key: string;
-            value: { stringValue?: string; intValue?: number | string };
+            value: {
+              stringValue?: string;
+              intValue?: number | string;
+              doubleValue?: number;
+            };
           }>;
         }>;
       }>;
@@ -919,6 +1063,9 @@ function otlpLogRecord(body: string): {
     }
     if (attribute.value.intValue !== undefined) {
       attributes[attribute.key] = Number(attribute.value.intValue);
+    }
+    if (attribute.value.doubleValue !== undefined) {
+      attributes[attribute.key] = attribute.value.doubleValue;
     }
   }
   const resource: Record<string, string> = {};

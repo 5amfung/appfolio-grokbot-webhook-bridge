@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { forwardToGrokBot } from "../src/forward-to-grok-bot.js";
 
 describe("forwardToGrokBot", () => {
@@ -6,7 +6,12 @@ describe("forwardToGrokBot", () => {
   const url = "https://bot.example/hooks/inbound";
   const token = "crsr_test";
 
+  afterEach(() => vi.restoreAllMocks());
+
   it("POSTs raw bytes with Bearer auth and returns ok on 2xx", async () => {
+    vi.spyOn(performance, "now")
+      .mockReturnValueOnce(100)
+      .mockReturnValueOnce(127.5);
     const fetchImpl = vi.fn(
       async (_input: string | URL, init?: RequestInit) => {
         expect(init?.method).toBe("POST");
@@ -19,11 +24,18 @@ describe("forwardToGrokBot", () => {
     ) as unknown as typeof fetch;
 
     const result = await forwardToGrokBot(body, url, token, fetchImpl);
-    expect(result).toEqual({ ok: true, status: 204 });
+    expect(result).toEqual({
+      ok: true,
+      status: 204,
+      outboundDurationMs: 27.5,
+    });
     expect(fetchImpl).toHaveBeenCalledOnce();
   });
 
   it("returns failure when upstream is non-2xx", async () => {
+    vi.spyOn(performance, "now")
+      .mockReturnValueOnce(200)
+      .mockReturnValueOnce(242);
     const fetchImpl = vi.fn(
       async () => new Response("nope", { status: 503 }),
     ) as unknown as typeof fetch;
@@ -33,10 +45,15 @@ describe("forwardToGrokBot", () => {
       ok: false,
       status: 503,
       error: "upstream returned 503",
+      outboundDurationMs: 42,
     });
+    expect(fetchImpl).toHaveBeenCalledOnce();
   });
 
   it("returns failure when fetch throws", async () => {
+    vi.spyOn(performance, "now")
+      .mockReturnValueOnce(300)
+      .mockReturnValueOnce(378.25);
     const fetchImpl = vi.fn(async () => {
       throw new Error("network down");
     }) as unknown as typeof fetch;
@@ -46,7 +63,9 @@ describe("forwardToGrokBot", () => {
       ok: false,
       error: "network down",
       failure: "other",
+      outboundDurationMs: 78.25,
     });
+    expect(fetchImpl).toHaveBeenCalledOnce();
   });
 
   it.each([
@@ -67,7 +86,12 @@ describe("forwardToGrokBot", () => {
     }) as unknown as typeof fetch;
 
     const result = await forwardToGrokBot(body, url, token, fetchImpl);
-    expect(result).toEqual({ ok: false, error: "fetch failed", failure });
+    expect(result).toEqual({
+      ok: false,
+      error: "fetch failed",
+      failure,
+      outboundDurationMs: expect.any(Number),
+    });
     expect(JSON.stringify(result)).not.toContain("bot.example");
     expect(JSON.stringify(result)).not.toContain(code);
   });
@@ -84,6 +108,7 @@ describe("forwardToGrokBot", () => {
       ok: false,
       error: "the operation timed out",
       failure: "timeout",
+      outboundDurationMs: expect.any(Number),
     });
   });
 });

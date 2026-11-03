@@ -14,9 +14,19 @@ export type HandlerOutcome =
       reason: string;
       classification: VerifyClassification;
     }
-  | { kind: "forwarded"; upstreamStatus: number }
-  | { kind: "upstream_failure"; error: string; upstreamStatus: number }
-  | { kind: "upstream_failure"; error: string; failure: UpstreamFetchFailure };
+  | { kind: "forwarded"; upstreamStatus: number; outboundDurationMs: number }
+  | {
+      kind: "upstream_failure";
+      error: string;
+      upstreamStatus: number;
+      outboundDurationMs: number;
+    }
+  | {
+      kind: "upstream_failure";
+      error: string;
+      failure: UpstreamFetchFailure;
+      outboundDurationMs: number;
+    };
 
 export type HandleDeps = {
   jwks: AppfolioJwks;
@@ -54,18 +64,24 @@ export async function handleAppfolioWebhook(
   );
 
   if (forwarded.ok) {
-    return { kind: "forwarded", upstreamStatus: forwarded.status };
+    return {
+      kind: "forwarded",
+      upstreamStatus: forwarded.status,
+      outboundDurationMs: forwarded.outboundDurationMs,
+    };
   }
   if ("status" in forwarded) {
     return {
       kind: "upstream_failure",
       error: forwarded.error,
       upstreamStatus: forwarded.status,
+      outboundDurationMs: forwarded.outboundDurationMs,
     };
   }
   return {
     kind: "upstream_failure",
     error: forwarded.error,
     failure: forwarded.failure,
+    outboundDurationMs: forwarded.outboundDurationMs,
   };
 }

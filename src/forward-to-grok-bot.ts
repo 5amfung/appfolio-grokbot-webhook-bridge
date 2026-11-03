@@ -9,9 +9,14 @@ export const UPSTREAM_FETCH_FAILURES = [
 export type UpstreamFetchFailure = (typeof UPSTREAM_FETCH_FAILURES)[number];
 
 export type ForwardResult =
-  | { ok: true; status: number }
-  | { ok: false; error: string; status: number }
-  | { ok: false; error: string; failure: UpstreamFetchFailure };
+  | { ok: true; status: number; outboundDurationMs: number }
+  | { ok: false; error: string; status: number; outboundDurationMs: number }
+  | {
+      ok: false;
+      error: string;
+      failure: UpstreamFetchFailure;
+      outboundDurationMs: number;
+    };
 
 const TIMEOUT_CODES = new Set([
   "ETIMEDOUT",
@@ -37,6 +42,7 @@ export async function forwardToGrokBot(
   bearerToken: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<ForwardResult> {
+  const started = performance.now();
   try {
     const res = await fetchImpl(webhookUrl.toString(), {
       method: "POST",
@@ -46,23 +52,27 @@ export async function forwardToGrokBot(
       },
       body: rawBody,
     });
+    const outboundDurationMs = performance.now() - started;
 
     const status = responseStatus(res);
     if (status >= 200 && status < 300) {
-      return { ok: true, status };
+      return { ok: true, status, outboundDurationMs };
     }
     return {
       ok: false,
       status,
       error: `upstream returned ${status}`,
+      outboundDurationMs,
     };
   } catch (err) {
+    const outboundDurationMs = performance.now() - started;
     const message =
       err instanceof Error ? err.message : "upstream fetch failed";
     return {
       ok: false,
       error: message,
       failure: classifyFetchFailure(err),
+      outboundDurationMs,
     };
   }
 }

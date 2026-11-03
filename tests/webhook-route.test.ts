@@ -82,7 +82,11 @@ describe("handleAppfolioWebhook (route logic, mocked upstream)", () => {
       fetchImpl,
     });
 
-    expect(outcome).toEqual({ kind: "forwarded", upstreamStatus: 200 });
+    expect(outcome).toEqual({
+      kind: "forwarded",
+      upstreamStatus: 200,
+      outboundDurationMs: expect.any(Number),
+    });
     expect(fetchImpl).toHaveBeenCalledOnce();
   });
 
@@ -103,6 +107,7 @@ describe("handleAppfolioWebhook (route logic, mocked upstream)", () => {
       kind: "upstream_failure",
       error: "upstream returned 500",
       upstreamStatus: 500,
+      outboundDurationMs: expect.any(Number),
     });
   });
 
@@ -123,6 +128,7 @@ describe("handleAppfolioWebhook (route logic, mocked upstream)", () => {
       kind: "upstream_failure",
       error: "network down",
       failure: "other",
+      outboundDurationMs: expect.any(Number),
     });
   });
 
@@ -290,6 +296,7 @@ describe("handleWebhookRequest", () => {
       family: "bad_signature",
       reason: "signature_invalid",
     });
+    expect(seen.captureWebhookHandled.mock.calls[0]?.[1]).toEqual(tampered);
     expect(JSON.stringify(seen.captureWebhookHandled.mock.calls)).not.toContain(
       "signature verification failed",
     );
@@ -365,7 +372,9 @@ describe("handleWebhookRequest", () => {
       kind: "forwarded",
       reason: "forwarded",
       upstreamStatus: 200,
+      outboundDurationMs: expect.any(Number),
     });
+    expect(seen.captureWebhookHandled.mock.calls[0]?.[1]).toEqual(rawBody);
   });
 
   it("returns 502 and records upstreamStatus 500", async () => {
@@ -398,6 +407,7 @@ describe("handleWebhookRequest", () => {
       kind: "upstream_failure",
       reason: "upstream_http_error",
       upstreamStatus: 500,
+      outboundDurationMs: expect.any(Number),
     });
     expect(JSON.stringify(seen.captureWebhookHandled.mock.calls)).not.toContain(
       "upstream returned 500",
@@ -438,6 +448,7 @@ describe("handleWebhookRequest", () => {
       kind: "upstream_failure",
       reason: "upstream_fetch_failed",
       failure: "connection_refused",
+      outboundDurationMs: expect.any(Number),
     });
     expect(JSON.stringify(seen.captureWebhookHandled.mock.calls)).not.toContain(
       "bot.example",
@@ -572,6 +583,7 @@ describe("handleWebhookRequest", () => {
       kind: "body_read_failed",
       reason: "body_read_failed",
     });
+    expect(seen.captureWebhookHandled.mock.calls[0]?.[1]).toBeUndefined();
     expect(JSON.stringify(seen.captureWebhookHandled.mock.calls)).not.toContain(
       "secret.example",
     );
