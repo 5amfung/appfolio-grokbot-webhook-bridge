@@ -822,11 +822,7 @@ describe("createBridgeTelemetry", () => {
   );
 
   it.each([
-    [
-      "raw UTF-8 bytes",
-      JSON.stringify({ value: "\u20AC".repeat(22_000) }),
-      0,
-    ],
+    ["raw UTF-8 bytes", JSON.stringify({ value: "\u20AC".repeat(22_000) }), 0],
     ["body at 64 KiB", "0".padEnd(64 * 1_024), 1],
     ["body above 64 KiB", "0".padEnd(64 * 1_024 + 1), 0],
     ["depth at 32", '{"child":'.repeat(32) + "true" + "}".repeat(32), 1],
