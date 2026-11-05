@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/compare/v0.5.0...v0.5.1) (2026-11-05)
+
+
+### Bug Fixes
+
+* **telemetry:** standardize metadata fields to snake_case ([#30](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/issues/30)) ([acd180d](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/commit/acd180d8599dc39b8fa437347dc633fa578e1728))
+
 ## [0.5.0](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/compare/v0.4.0...v0.5.0) (2026-11-03)
 
 
