@@ -36,9 +36,9 @@ describe("log flush batching", () => {
           attributes: {
             kind: "forwarded",
             reason: "forwarded",
-            durationMs,
-            upstreamStatus: 200,
-            outboundDurationMs: 0.5,
+            duration_ms: durationMs,
+            upstream_status: 200,
+            outbound_duration_ms: 0.5,
             body: '{"tenant":"AdaTenant991"}',
             authorization: "Bearer crsr_private",
             signature: "private-signature",
@@ -54,9 +54,9 @@ describe("log flush batching", () => {
         [1, 2, 3].map((durationMs) => ({
           kind: "forwarded",
           reason: "forwarded",
-          durationMs,
-          upstreamStatus: 200,
-          outboundDurationMs: 0.5,
+          duration_ms: durationMs,
+          upstream_status: 200,
+          outbound_duration_ms: 0.5,
         })),
       );
       expect(
@@ -130,7 +130,7 @@ describe("log flush batching", () => {
       expect(secondSettled).toBe(false);
       expect(
         batches.map((batch) =>
-          batch.map((record) => record.attributes.durationMs),
+          batch.map((record) => record.attributes.duration_ms),
         ),
       ).toEqual([[1], [2]]);
 
