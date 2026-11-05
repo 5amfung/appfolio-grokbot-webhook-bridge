@@ -125,12 +125,17 @@ it("exports forwarded payloads and bounds unsigned request logs through real HTT
     expect(logPosts).toHaveLength(1);
     const log = readLog(logPosts[0]?.body ?? "");
     expect(log.body).toBe("webhook_handled");
+    for (const key of Object.keys(log.attributes)) {
+      if (!key.startsWith("payload.")) {
+        expect(key).toMatch(/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/);
+      }
+    }
     expect(log.attributes).toMatchObject({
       kind: "forwarded",
       reason: "forwarded",
-      upstreamStatus: 204,
+      upstream_status: 204,
       environment: "test",
-      serviceVersion: "logging-proof",
+      service_version: "logging-proof",
     });
     expect(
       Object.fromEntries(
@@ -149,8 +154,8 @@ it("exports forwarded payloads and bounds unsigned request logs through real HTT
       "payload.database_id": appfolioWebhook.database_id,
     });
     expect(log.attributes).not.toHaveProperty("payload");
-    const outboundDurationMs = log.attributes.outboundDurationMs;
-    const durationMs = log.attributes.durationMs;
+    const outboundDurationMs = log.attributes.outbound_duration_ms;
+    const durationMs = log.attributes.duration_ms;
     if (
       typeof outboundDurationMs !== "number" ||
       typeof durationMs !== "number"
@@ -170,7 +175,7 @@ it("exports forwarded payloads and bounds unsigned request logs through real HTT
     expect(analyticsPosts.length).toBeGreaterThan(0);
     const analyticsText = analyticsPosts.map((entry) => entry.body).join("\n");
     expect(analyticsText).toContain("webhook_handled");
-    expect(analyticsText).toContain("outboundDurationMs");
+    expect(analyticsText).toContain("outbound_duration_ms");
     expect(analyticsText).not.toContain(appfolioWebhook.client_id);
     expect(analyticsText).not.toContain(appfolioWebhook.event_id);
     expect(analyticsText).not.toContain(appfolioWebhook.resource_id);
@@ -207,9 +212,9 @@ it("exports forwarded payloads and bounds unsigned request logs through real HTT
       kind: "unauthorized",
       family: "bad_signature",
       reason: "missing_signature",
-      durationMs: expect.any(Number),
+      duration_ms: expect.any(Number),
       environment: "test",
-      serviceVersion: "logging-proof",
+      service_version: "logging-proof",
     });
     expect(errors).toEqual([]);
   } finally {

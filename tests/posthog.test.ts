@@ -226,9 +226,9 @@ describe("createBridgeTelemetry", () => {
       distinctId: "tenant-42",
       properties: {
         kind: "forwarded",
-        upstreamStatus: 200,
-        outboundDurationMs: 0.5,
-        durationMs: 12,
+        upstream_status: 200,
+        outbound_duration_ms: 0.5,
+        duration_ms: 12,
         reason: "verify failed https://bot.example/hook bearer crsr_secret",
         $process_person_profile: true,
         body: '{"tenant":"Ada","address":"1 Main"}',
@@ -244,9 +244,9 @@ describe("createBridgeTelemetry", () => {
     expect(event?.disableGeoip).toBe(true);
     expect(event?.properties).toMatchObject({
       kind: "forwarded",
-      upstreamStatus: 200,
-      outboundDurationMs: 0.5,
-      durationMs: 12,
+      upstream_status: 200,
+      outbound_duration_ms: 0.5,
+      duration_ms: 12,
       $process_person_profile: false,
       reason: "verify failed [redacted-url] bearer [redacted]",
     });
@@ -360,9 +360,9 @@ describe("createBridgeTelemetry", () => {
         kind: "unauthorized",
         reason: "signature_invalid",
         family: "bad_signature",
-        durationMs: 8,
+        duration_ms: 8,
         environment: DEFAULT_DEPLOYMENT_ENVIRONMENT,
-        serviceVersion: packageJson.version,
+        service_version: packageJson.version,
       },
     });
     expect(JSON.stringify(capture.mock.calls)).toContain("signature_invalid");
@@ -450,11 +450,11 @@ describe("createBridgeTelemetry", () => {
       properties: {
         kind: "forwarded",
         reason: "forwarded",
-        durationMs: 3,
-        upstreamStatus: 204,
-        outboundDurationMs: 0.5,
+        duration_ms: 3,
+        upstream_status: 204,
+        outbound_duration_ms: 0.5,
         environment: "production",
-        serviceVersion: "abc123",
+        service_version: "abc123",
       },
     });
     telemetry.captureWebhookHandled({
@@ -470,11 +470,11 @@ describe("createBridgeTelemetry", () => {
       properties: {
         kind: "upstream_failure",
         reason: "upstream_fetch_failed",
-        durationMs: 4,
+        duration_ms: 4,
         failure: "dns",
-        outboundDurationMs: 0.5,
+        outbound_duration_ms: 0.5,
         environment: "production",
-        serviceVersion: "abc123",
+        service_version: "abc123",
       },
     });
   });
@@ -669,8 +669,8 @@ describe("createBridgeTelemetry", () => {
       body: "forwarded https://bot.example/hook bearer crsr_live",
       attributes: {
         kind: "forwarded",
-        upstreamStatus: 502,
-        outboundDurationMs: 0.5,
+        upstream_status: 502,
+        outbound_duration_ms: 0.5,
         body: '{"tenant":"Ada"}',
         authorization: "Bearer crsr_live",
         signature: "aaaa.bbbb",
@@ -684,8 +684,8 @@ describe("createBridgeTelemetry", () => {
     expect(record?.body).toBe("forwarded [redacted-url] bearer [redacted]");
     expect(record?.attributes).toMatchObject({
       kind: "forwarded",
-      upstreamStatus: 502,
-      outboundDurationMs: 0.5,
+      upstream_status: 502,
+      outbound_duration_ms: 0.5,
     });
     expect(record?.attributes).not.toHaveProperty("body");
     expect(record?.attributes).not.toHaveProperty("authorization");
@@ -799,11 +799,11 @@ describe("createBridgeTelemetry", () => {
       expect(records[0]?.attributes).toEqual({
         kind: "forwarded",
         reason: "forwarded",
-        durationMs: 12,
-        upstreamStatus: 200,
-        outboundDurationMs: 8.5,
+        duration_ms: 12,
+        upstream_status: 200,
+        outbound_duration_ms: 8.5,
         environment: DEFAULT_DEPLOYMENT_ENVIRONMENT,
-        serviceVersion: packageJson.version,
+        service_version: packageJson.version,
         ...payloadProperties,
       });
       expect(records[0]?.droppedAttributesCount).toBe(0);
@@ -812,11 +812,11 @@ describe("createBridgeTelemetry", () => {
       expect(capture.mock.calls[0]?.[0].properties).toEqual({
         kind: "forwarded",
         reason: "forwarded",
-        durationMs: 12,
-        upstreamStatus: 200,
-        outboundDurationMs: 8.5,
+        duration_ms: 12,
+        upstream_status: 200,
+        outbound_duration_ms: 8.5,
         environment: DEFAULT_DEPLOYMENT_ENVIRONMENT,
-        serviceVersion: packageJson.version,
+        service_version: packageJson.version,
       });
     },
   );
@@ -932,9 +932,9 @@ describe("createBridgeTelemetry", () => {
       kind: "unauthorized",
       family: "bad_signature",
       reason: "missing_signature",
-      durationMs: 1,
+      duration_ms: 1,
       environment: DEFAULT_DEPLOYMENT_ENVIRONMENT,
-      serviceVersion: packageJson.version,
+      service_version: packageJson.version,
     };
     expect(records[0]?.attributes).toMatchObject(outcome);
     expect(
@@ -986,7 +986,7 @@ describe("createBridgeTelemetry", () => {
         kind: "unauthorized",
         "payload.parse_error": "invalid_json",
       });
-      expect(records[0]?.attributes).not.toHaveProperty("outboundDurationMs");
+      expect(records[0]?.attributes).not.toHaveProperty("outbound_duration_ms");
     },
   );
 
@@ -1025,11 +1025,11 @@ describe("createBridgeTelemetry", () => {
       expect(record.attributes).toEqual({
         kind: "forwarded",
         reason: "forwarded",
-        durationMs: 12,
-        upstreamStatus: 200,
-        outboundDurationMs: 0.5,
+        duration_ms: 12,
+        upstream_status: 200,
+        outbound_duration_ms: 0.5,
         environment: "production",
-        serviceVersion: "deadbeef",
+        service_version: "deadbeef",
       });
       expect(record.resource).toMatchObject({
         "service.name": POSTHOG_SERVICE_NAME,
@@ -1082,11 +1082,11 @@ describe("createBridgeTelemetry", () => {
         properties: {
           kind: "forwarded",
           reason: "forwarded",
-          upstreamStatus: 200,
-          outboundDurationMs: 0.5,
-          durationMs: 12,
+          upstream_status: 200,
+          outbound_duration_ms: 0.5,
+          duration_ms: 12,
           environment: "production",
-          serviceVersion: "deadbeef",
+          service_version: "deadbeef",
           $process_person_profile: false,
         },
       });
@@ -1098,7 +1098,7 @@ describe("createBridgeTelemetry", () => {
       expect(otlpLogRecord(posts[0]?.body ?? "").attributes).toMatchObject({
         kind: "forwarded",
         environment: "production",
-        serviceVersion: "deadbeef",
+        service_version: "deadbeef",
       });
     } finally {
       log.mockRestore();

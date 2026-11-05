@@ -252,7 +252,7 @@ export function createBridgeTelemetry(
       const properties = {
         ...webhookHandledProperties(event),
         environment,
-        serviceVersion,
+        service_version: serviceVersion,
       };
       try {
         documentedLogs.getLogger(POSTHOG_SERVICE_NAME, PACKAGE_VERSION).emit({
@@ -295,6 +295,7 @@ export function createBridgeTelemetry(
   };
 }
 
+/** Serialize bridge metadata in snake_case for both logs and analytics. */
 function webhookHandledProperties(
   event: WebhookHandledEvent,
 ): Record<string, string | number> {
@@ -306,22 +307,22 @@ function webhookHandledProperties(
       return {
         kind: event.kind,
         reason: event.reason,
-        durationMs: event.durationMs,
+        duration_ms: event.durationMs,
       };
     case "unauthorized":
       return {
         kind: event.kind,
         reason: event.reason,
         family: event.family,
-        durationMs: event.durationMs,
+        duration_ms: event.durationMs,
       };
     case "forwarded":
       return {
         kind: event.kind,
         reason: event.reason,
-        durationMs: event.durationMs,
-        upstreamStatus: event.upstreamStatus,
-        outboundDurationMs: event.outboundDurationMs,
+        duration_ms: event.durationMs,
+        upstream_status: event.upstreamStatus,
+        outbound_duration_ms: event.outboundDurationMs,
       };
     case "upstream_failure":
       switch (event.reason) {
@@ -329,17 +330,17 @@ function webhookHandledProperties(
           return {
             kind: event.kind,
             reason: event.reason,
-            durationMs: event.durationMs,
+            duration_ms: event.durationMs,
             failure: event.failure,
-            outboundDurationMs: event.outboundDurationMs,
+            outbound_duration_ms: event.outboundDurationMs,
           };
         case "upstream_http_error":
           return {
             kind: event.kind,
             reason: event.reason,
-            durationMs: event.durationMs,
-            upstreamStatus: event.upstreamStatus,
-            outboundDurationMs: event.outboundDurationMs,
+            duration_ms: event.durationMs,
+            upstream_status: event.upstreamStatus,
+            outbound_duration_ms: event.outboundDurationMs,
           };
         default: {
           const unexpected: never = event;
