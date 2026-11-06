@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/compare/v0.6.0...v0.6.1) (2026-11-06)
+
+
+### Bug Fixes
+
+* **build:** resolve fetch types in Vercel function builds ([#34](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/issues/34)) ([aee06fa](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/commit/aee06fa9527183bb2100b13033ee12d8d8f2a19c))
+
 ## [0.6.0](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/compare/v0.5.1...v0.6.0) (2026-11-06)
 
 
