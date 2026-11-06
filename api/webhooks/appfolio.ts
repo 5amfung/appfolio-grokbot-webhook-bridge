@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { waitUntil } from "@vercel/functions";
 import { createRemoteJWKSet } from "jose";
@@ -11,6 +12,7 @@ import { handleAppfolioWebhook } from "../../src/handle-appfolio-webhook.js";
 import {
   createBridgeTelemetry,
   type BridgeTelemetry,
+  type WebhookDiagnostics,
   type WebhookHandledEvent,
 } from "../../src/posthog.js";
 import { readRawBody } from "../../src/raw-body.js";
@@ -29,6 +31,9 @@ export const config = {
 let cachedJwks: ReturnType<typeof createRemoteJWKSet> | undefined;
 let cachedJwksUrl: string | undefined;
 let telemetry: BridgeTelemetry | undefined;
+// These identify this loaded route module, not a Vercel physical instance.
+const runtimeId = randomUUID();
+let runtimeRequestCount = 0;
 
 type WebhookRequestTelemetry = Pick<
   BridgeTelemetry,
@@ -84,9 +89,24 @@ export default function handler(
 export async function handleWebhookRequest(
   req: VercelRequest,
   res: VercelResponse,
-  telemetry: WebhookRequestTelemetry = bridgeTelemetry(),
+  providedTelemetry?: WebhookRequestTelemetry,
 ): Promise<void> {
+  const entered = performance.now();
+  const runtimeRequestNumber = ++runtimeRequestCount;
+  const telemetrySetupStarted = performance.now();
+  const telemetry = providedTelemetry ?? bridgeTelemetry();
+  const telemetrySetupDurationMs = performance.now() - telemetrySetupStarted;
+  // Preserve the existing timer's boundary after lazy telemetry construction.
   const started = Date.now();
+  const vercelId = allowedVercelId(req.headers["x-vercel-id"]);
+  const vercelRegion = process.env.VERCEL_REGION;
+  const diagnostics: Omit<WebhookDiagnostics, "handlerElapsedMs"> = {
+    telemetrySetupDurationMs,
+    runtimeId,
+    runtimeRequestNumber,
+    ...(vercelId ? { vercelId } : {}),
+    ...(vercelRegion ? { vercelRegion } : {}),
+  };
   let pending: PendingWebhook = { kind: "unexpected" };
   let rawBody: Uint8Array | undefined;
   try {
@@ -108,21 +128,42 @@ export async function handleWebhookRequest(
       return;
     }
 
+    const inputReadStarted = performance.now();
     try {
       rawBody = await readRawBody(req);
     } catch (err) {
       pending = { kind: "body_read_failed" };
       throw err;
+    } finally {
+      diagnostics.inputReadDurationMs = performance.now() - inputReadStarted;
     }
 
     const signatureHeader =
       (req.headers["x-jws-signature"] as string | undefined) ?? undefined;
 
+    const jwks = getJwks(bridgeConfig.appfolioJwksUrl);
     const outcome = await handleAppfolioWebhook(rawBody, signatureHeader, {
-      jwks: getJwks(bridgeConfig.appfolioJwksUrl),
+      jwks: async (...args: Parameters<typeof jwks>) => {
+        const lookupStarted = performance.now();
+        const cacheFreshAtLookupStart = jwks.fresh;
+        const reloadingAtLookupStart = jwks.reloading;
+        try {
+          return await jwks(...args);
+        } finally {
+          diagnostics.jwksLookup = {
+            durationMs: performance.now() - lookupStarted,
+            cacheFreshAtLookupStart,
+            reloadingAtLookupStart,
+          };
+        }
+      },
       grokBotWebhookUrl: bridgeConfig.grokBotWebhookUrl,
       grokBotBearerToken: bridgeConfig.grokBotBearerToken,
     });
+    diagnostics.verificationDurationMs = outcome.verificationDurationMs;
+    if ("responseCleanup" in outcome) {
+      diagnostics.responseCleanup = outcome.responseCleanup;
+    }
 
     switch (outcome.kind) {
       case "unauthorized":
@@ -169,9 +210,20 @@ export async function handleWebhookRequest(
       res.status(500).json({ error: "internal error" });
     }
   } finally {
-    telemetry.captureWebhookHandled(toHandledEvent(pending, started), rawBody);
+    telemetry.captureWebhookHandled(toHandledEvent(pending, started), rawBody, {
+      ...diagnostics,
+      handlerElapsedMs: performance.now() - entered,
+    });
     waitUntil(telemetry.flush());
   }
+}
+
+function allowedVercelId(
+  value: string | string[] | undefined,
+): string | undefined {
+  return typeof value === "string" && /^[A-Za-z0-9:._-]{1,256}$/.test(value)
+    ? value
+    : undefined;
 }
 
 function toHandledEvent(
