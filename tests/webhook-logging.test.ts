@@ -13,19 +13,19 @@ import appfolioWebhook from "./fixtures/appfolio-work-order-webhook.json" with {
 vi.mock("@vercel/functions", () => ({ waitUntil: vi.fn() }));
 
 const DIAGNOSTIC_LOG_ATTRIBUTES = [
-  "handler_elapsed_ms",
-  "telemetry_setup_duration_ms",
-  "input_read_duration_ms",
-  "verification_duration_ms",
-  "jwks_lookup_duration_ms",
-  "jwks_cache_fresh_at_lookup_start",
-  "jwks_reloading_at_lookup_start",
-  "response_cleanup_duration_ms",
-  "response_cleanup_outcome",
-  "runtime_id",
-  "runtime_request_number",
-  "vercel_id",
-  "vercel_region",
+  "perf_handler_elapsed_ms",
+  "perf_telemetry_setup_duration_ms",
+  "perf_input_read_duration_ms",
+  "perf_verification_duration_ms",
+  "perf_jwks_lookup_duration_ms",
+  "perf_jwks_cache_fresh_at_lookup_start",
+  "perf_jwks_reloading_at_lookup_start",
+  "perf_response_cleanup_duration_ms",
+  "perf_response_cleanup_outcome",
+  "perf_runtime_id",
+  "perf_runtime_request_number",
+  "perf_vercel_id",
+  "perf_vercel_region",
 ];
 
 it("exports forwarded payloads and bounds unsigned request logs through real HTTP", async () => {
@@ -142,19 +142,19 @@ it("exports forwarded payloads and bounds unsigned request logs through real HTT
       upstream_status: 204,
       environment: "test",
       service_version: "logging-proof",
-      handler_elapsed_ms: expect.any(Number),
-      telemetry_setup_duration_ms: expect.any(Number),
-      input_read_duration_ms: expect.any(Number),
-      verification_duration_ms: expect.any(Number),
-      jwks_lookup_duration_ms: expect.any(Number),
-      jwks_cache_fresh_at_lookup_start: false,
-      jwks_reloading_at_lookup_start: false,
-      response_cleanup_duration_ms: expect.any(Number),
-      response_cleanup_outcome: "no_body",
-      runtime_id: expect.any(String),
-      runtime_request_number: expect.any(Number),
-      vercel_id: "sfo1::iad1-logging-proof",
-      vercel_region: "iad1",
+      perf_handler_elapsed_ms: expect.any(Number),
+      perf_telemetry_setup_duration_ms: expect.any(Number),
+      perf_input_read_duration_ms: expect.any(Number),
+      perf_verification_duration_ms: expect.any(Number),
+      perf_jwks_lookup_duration_ms: expect.any(Number),
+      perf_jwks_cache_fresh_at_lookup_start: false,
+      perf_jwks_reloading_at_lookup_start: false,
+      perf_response_cleanup_duration_ms: expect.any(Number),
+      perf_response_cleanup_outcome: "no_body",
+      perf_runtime_id: expect.any(String),
+      perf_runtime_request_number: expect.any(Number),
+      perf_vercel_id: "sfo1::iad1-logging-proof",
+      perf_vercel_region: "iad1",
     });
     expect(
       Object.fromEntries(
@@ -184,13 +184,18 @@ it("exports forwarded payloads and bounds unsigned request logs through real HTT
     expect(outboundDurationMs).toBeGreaterThanOrEqual(20);
     expect(durationMs).toBeGreaterThanOrEqual(outboundDurationMs + 40);
     expect(
-      numericAttribute(log, "jwks_lookup_duration_ms"),
+      numericAttribute(log, "perf_jwks_lookup_duration_ms"),
     ).toBeGreaterThanOrEqual(40);
     expect(
-      numericAttribute(log, "verification_duration_ms"),
-    ).toBeGreaterThanOrEqual(numericAttribute(log, "jwks_lookup_duration_ms"));
-    expect(numericAttribute(log, "handler_elapsed_ms")).toBeGreaterThanOrEqual(
-      numericAttribute(log, "verification_duration_ms") + outboundDurationMs,
+      numericAttribute(log, "perf_verification_duration_ms"),
+    ).toBeGreaterThanOrEqual(
+      numericAttribute(log, "perf_jwks_lookup_duration_ms"),
+    );
+    expect(
+      numericAttribute(log, "perf_handler_elapsed_ms"),
+    ).toBeGreaterThanOrEqual(
+      numericAttribute(log, "perf_verification_duration_ms") +
+        outboundDurationMs,
     );
     expect(log.attributes).not.toHaveProperty("authorization");
     expect(log.attributes).not.toHaveProperty("signature");
@@ -246,14 +251,14 @@ it("exports forwarded payloads and bounds unsigned request logs through real HTT
       duration_ms: expect.any(Number),
       environment: "test",
       service_version: "logging-proof",
-      handler_elapsed_ms: expect.any(Number),
-      telemetry_setup_duration_ms: expect.any(Number),
-      input_read_duration_ms: expect.any(Number),
-      verification_duration_ms: expect.any(Number),
-      runtime_id: log.attributes.runtime_id,
-      runtime_request_number:
-        numericAttribute(log, "runtime_request_number") + 1,
-      vercel_region: "iad1",
+      perf_handler_elapsed_ms: expect.any(Number),
+      perf_telemetry_setup_duration_ms: expect.any(Number),
+      perf_input_read_duration_ms: expect.any(Number),
+      perf_verification_duration_ms: expect.any(Number),
+      perf_runtime_id: log.attributes.perf_runtime_id,
+      perf_runtime_request_number:
+        numericAttribute(log, "perf_runtime_request_number") + 1,
+      perf_vercel_region: "iad1",
     });
     expect(errors).toEqual([]);
   } finally {
@@ -298,52 +303,55 @@ it("exports independent request measurements for shared and cached JWKS lookups"
     const secondLog = logForRequest(logs, secondId);
     const cachedLog = logForRequest(logs, cachedId);
     expect(firstLog.attributes).toMatchObject({
-      jwks_cache_fresh_at_lookup_start: false,
-      jwks_reloading_at_lookup_start: false,
+      perf_jwks_cache_fresh_at_lookup_start: false,
+      perf_jwks_reloading_at_lookup_start: false,
     });
     expect(secondLog.attributes).toMatchObject({
-      jwks_cache_fresh_at_lookup_start: false,
-      jwks_reloading_at_lookup_start: true,
+      perf_jwks_cache_fresh_at_lookup_start: false,
+      perf_jwks_reloading_at_lookup_start: true,
     });
     expect(cachedLog.attributes).toMatchObject({
-      jwks_cache_fresh_at_lookup_start: true,
-      jwks_reloading_at_lookup_start: false,
+      perf_jwks_cache_fresh_at_lookup_start: true,
+      perf_jwks_reloading_at_lookup_start: false,
     });
     expect(
-      numericAttribute(firstLog, "jwks_lookup_duration_ms"),
+      numericAttribute(firstLog, "perf_jwks_lookup_duration_ms"),
     ).toBeGreaterThanOrEqual(40);
     expect(
-      numericAttribute(secondLog, "jwks_lookup_duration_ms"),
+      numericAttribute(secondLog, "perf_jwks_lookup_duration_ms"),
     ).toBeGreaterThanOrEqual(40);
-    const firstNumber = numericAttribute(firstLog, "runtime_request_number");
+    const firstNumber = numericAttribute(
+      firstLog,
+      "perf_runtime_request_number",
+    );
     for (const [index, log] of [firstLog, secondLog, cachedLog].entries()) {
       expect(log.body).toBe("webhook_handled");
       expect(log.attributes).toMatchObject({
         kind: "forwarded",
         upstream_status: 204,
-        response_cleanup_outcome: "no_body",
-        runtime_id: firstLog.attributes.runtime_id,
-        runtime_request_number: firstNumber + index,
-        vercel_region: "iad1",
+        perf_response_cleanup_outcome: "no_body",
+        perf_runtime_id: firstLog.attributes.perf_runtime_id,
+        perf_runtime_request_number: firstNumber + index,
+        perf_vercel_region: "iad1",
         "payload.event_id": appfolioWebhook.event_id,
       });
       expect(
-        numericAttribute(log, "verification_duration_ms"),
+        numericAttribute(log, "perf_verification_duration_ms"),
       ).toBeGreaterThanOrEqual(
-        numericAttribute(log, "jwks_lookup_duration_ms"),
+        numericAttribute(log, "perf_jwks_lookup_duration_ms"),
       );
       expect(
         numericAttribute(log, "outbound_duration_ms"),
       ).toBeGreaterThanOrEqual(20);
       expect(
-        numericAttribute(log, "handler_elapsed_ms"),
+        numericAttribute(log, "perf_handler_elapsed_ms"),
       ).toBeGreaterThanOrEqual(
-        numericAttribute(log, "verification_duration_ms") +
+        numericAttribute(log, "perf_verification_duration_ms") +
           numericAttribute(log, "outbound_duration_ms") +
-          numericAttribute(log, "response_cleanup_duration_ms"),
+          numericAttribute(log, "perf_response_cleanup_duration_ms"),
       );
     }
-    expect(firstLog.attributes.runtime_id).toEqual(expect.any(String));
+    expect(firstLog.attributes.perf_runtime_id).toEqual(expect.any(String));
     expect(firstNumber).toBeGreaterThan(0);
     expect(bridge.errors()).toEqual([]);
     expectLogOnlyDiagnostics(bridge.analyticsText());
@@ -383,21 +391,21 @@ it("exports the stages reached by failed verification, upstream rejection, and a
       kind: "unauthorized",
       family: "signing_key",
       reason: "jwks_unavailable",
-      verification_duration_ms: expect.any(Number),
-      jwks_lookup_duration_ms: expect.any(Number),
-      jwks_cache_fresh_at_lookup_start: false,
-      jwks_reloading_at_lookup_start: false,
+      perf_verification_duration_ms: expect.any(Number),
+      perf_jwks_lookup_duration_ms: expect.any(Number),
+      perf_jwks_cache_fresh_at_lookup_start: false,
+      perf_jwks_reloading_at_lookup_start: false,
     });
     for (const attribute of [
       "outbound_duration_ms",
       "upstream_status",
-      "response_cleanup_duration_ms",
-      "response_cleanup_outcome",
+      "perf_response_cleanup_duration_ms",
+      "perf_response_cleanup_outcome",
     ]) {
       expect(verification.attributes).not.toHaveProperty(attribute);
     }
     expect(
-      numericAttribute(verification, "jwks_lookup_duration_ms"),
+      numericAttribute(verification, "perf_jwks_lookup_duration_ms"),
     ).toBeGreaterThanOrEqual(20);
     const rejected = logForRequest(logs, rejectedId);
     expect(rejected.attributes).toMatchObject({
@@ -405,20 +413,20 @@ it("exports the stages reached by failed verification, upstream rejection, and a
       reason: "upstream_http_error",
       upstream_status: 503,
       outbound_duration_ms: expect.any(Number),
-      response_cleanup_duration_ms: expect.any(Number),
-      response_cleanup_outcome: "drained",
+      perf_response_cleanup_duration_ms: expect.any(Number),
+      perf_response_cleanup_outcome: "drained",
     });
     const stalled = logForRequest(logs, stalledId);
     expect(stalled.attributes).toMatchObject({
       kind: "forwarded",
       reason: "forwarded",
       upstream_status: 200,
-      jwks_cache_fresh_at_lookup_start: true,
-      response_cleanup_duration_ms: expect.any(Number),
-      response_cleanup_outcome: "timeout",
+      perf_jwks_cache_fresh_at_lookup_start: true,
+      perf_response_cleanup_duration_ms: expect.any(Number),
+      perf_response_cleanup_outcome: "timeout",
     });
     expect(
-      numericAttribute(stalled, "response_cleanup_duration_ms"),
+      numericAttribute(stalled, "perf_response_cleanup_duration_ms"),
     ).toBeGreaterThanOrEqual(90);
     expect(bridge.forwardedPaths()).toEqual([
       "/grok-http-error",
@@ -635,7 +643,9 @@ function numericAttribute(log: ExportedLog, key: string): number {
 }
 
 function logForRequest(logs: ExportedLog[], vercelId: string): ExportedLog {
-  const matching = logs.filter((log) => log.attributes.vercel_id === vercelId);
+  const matching = logs.filter(
+    (log) => log.attributes.perf_vercel_id === vercelId,
+  );
   expect(matching).toHaveLength(1);
   return matching[0];
 }

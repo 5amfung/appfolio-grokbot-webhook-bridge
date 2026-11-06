@@ -51,25 +51,25 @@ Bridge metadata keys use snake_case in both logs and analytics: `duration_ms`, `
 
 The outbound request has a 30-second deadline to receive response headers. After headers arrive, the bridge discards the response body with a 64 KiB read budget and a 100 ms cleanup deadline so small, complete responses can reuse their connection. Slow, oversized, or failed response bodies are aborted and canceled. Cleanup time is included in `duration_ms` and excluded from `outbound_duration_ms`. The received HTTP status still determines the outcome, so cleanup failure after an upstream 2xx does not cause a 502 or another delivery attempt. The bridge does not retry outbound requests.
 
-Each outcome log also includes request-local diagnostics. These fields use `performance.now()` for elapsed durations and are excluded from analytics and exception events. Stages that never run are omitted, while measured zero durations and false cache flags are retained.
+Each outcome log also includes request-local diagnostics under the `perf_` prefix so they sort together in PostHog. These fields use `performance.now()` for elapsed durations and are excluded from analytics and exception events. Stages that never run are omitted, while measured zero durations and false cache flags are retained. Queries over newly emitted logs must use the prefixed names below.
 
-| Log attribute                      | Meaning                                                                                                                                        |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `handler_elapsed_ms`               | Handler entry, before telemetry setup, through the outcome-log call, excluding log serialization and export.                                   |
-| `telemetry_setup_duration_ms`      | Time obtaining or constructing the cached telemetry client.                                                                                    |
-| `input_read_duration_ms`           | Time buffering the original request bytes, including failed reads.                                                                             |
-| `verification_duration_ms`         | Complete signature verification, including signing-key lookup.                                                                                 |
-| `jwks_lookup_duration_ms`          | Time awaiting the existing cached signing-key resolver, including refresh waits and failures.                                                  |
-| `jwks_cache_fresh_at_lookup_start` | Whether cached keys were within their configured lifetime when lookup began.                                                                   |
-| `jwks_reloading_at_lookup_start`   | Whether a signing-key fetch was already in progress when lookup began.                                                                         |
-| `response_cleanup_duration_ms`     | Time after upstream headers through drain completion or cancellation request and return of control. It does not await cancellation completion. |
-| `response_cleanup_outcome`         | `no_body`, `drained`, `size_limit`, `timeout`, or `read_error`. Present only when an upstream HTTP response was received.                      |
-| `runtime_id`                       | UUID generated once for this loaded route module.                                                                                              |
-| `runtime_request_number`           | Invocation count for that module, incremented before asynchronous work.                                                                        |
-| `vercel_id`                        | Optional single `x-vercel-id` value, limited to 256 ASCII letters, digits, colons, dots, underscores, and hyphens.                             |
-| `vercel_region`                    | Optional `VERCEL_REGION` execution-region value. It is not inferred from the routing identifier.                                               |
+| Log attribute                           | Meaning                                                                                                                                        |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `perf_handler_elapsed_ms`               | Handler entry, before telemetry setup, through the outcome-log call, excluding log serialization and export.                                   |
+| `perf_telemetry_setup_duration_ms`      | Time obtaining or constructing the cached telemetry client.                                                                                    |
+| `perf_input_read_duration_ms`           | Time buffering the original request bytes, including failed reads.                                                                             |
+| `perf_verification_duration_ms`         | Complete signature verification, including signing-key lookup.                                                                                 |
+| `perf_jwks_lookup_duration_ms`          | Time awaiting the existing cached signing-key resolver, including refresh waits and failures.                                                  |
+| `perf_jwks_cache_fresh_at_lookup_start` | Whether cached keys were within their configured lifetime when lookup began.                                                                   |
+| `perf_jwks_reloading_at_lookup_start`   | Whether a signing-key fetch was already in progress when lookup began.                                                                         |
+| `perf_response_cleanup_duration_ms`     | Time after upstream headers through drain completion or cancellation request and return of control. It does not await cancellation completion. |
+| `perf_response_cleanup_outcome`         | `no_body`, `drained`, `size_limit`, `timeout`, or `read_error`. Present only when an upstream HTTP response was received.                      |
+| `perf_runtime_id`                       | UUID generated once for this loaded route module.                                                                                              |
+| `perf_runtime_request_number`           | Invocation count for that module, incremented before asynchronous work.                                                                        |
+| `perf_vercel_id`                        | Optional single `x-vercel-id` value, limited to 256 ASCII letters, digits, colons, dots, underscores, and hyphens.                             |
+| `perf_vercel_region`                    | Optional `VERCEL_REGION` execution-region value. It is not inferred from the routing identifier.                                               |
 
-`handler_elapsed_ms` includes lazy telemetry construction that `duration_ms` excludes. Both exclude platform startup, static module imports, log serialization, and telemetry export. They measure handler work, not AppFolio receiving the response. Matching runtime IDs and increasing request numbers establish module reuse; request number one does not prove a platform cold start. Use Vercel's invocation start type to establish that.
+`perf_handler_elapsed_ms` includes lazy telemetry construction that `duration_ms` excludes. Both exclude platform startup, static module imports, log serialization, and telemetry export. They measure handler work, not AppFolio receiving the response. Matching runtime IDs and increasing request numbers establish module reuse; request number one does not prove a platform cold start. Use Vercel's invocation start type to establish that.
 
 JWKS diagnostics wrap the existing cached resolver without changing its refresh behavior or adding network requests. Concurrent lookups can share one fetch while recording separate waits. Cache freshness alone does not establish that no network request occurred. Full DNS, TCP, TLS, and upstream processing attribution is not recorded.
 
