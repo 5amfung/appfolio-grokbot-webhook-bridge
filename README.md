@@ -117,11 +117,16 @@ pnpm install
 pnpm run lint
 pnpm run format:check
 pnpm run typecheck
+pnpm run check:vercel
 pnpm test
 pnpm dlx vercel dev   # after setting env (vercel env pull or .env)
 ```
 
-CI runs lint, formatting, type checks, and tests. Use `pnpm run lint:fix` to apply available ESLint fixes and `pnpm run format` to format files with Prettier. Generated files and the locked design document are excluded from formatting.
+CI runs lint, formatting, type checks, Vercel function builds, and tests. Use `pnpm run lint:fix` to apply available ESLint fixes and `pnpm run format` to format files with Prettier. Generated files and the locked design document are excluded from formatting.
+
+`check:vercel` uses the installed `@vercel/node` builder in a fresh Node 24 process for each API entrypoint. It builds from local files with dependency installation skipped and needs no Vercel credentials or environment pull. It fails on printed TypeScript errors even when the builder successfully emits a function.
+
+Keep `undici-types` as a direct development dependency. Vercel's per-function compiler does not resolve this transitive dependency through pnpm's symlinked `@types/node` path, leaving Node's global fetch types incomplete. The direct dependency makes those declarations available without adding runtime code or browser globals.
 
 `package.json` has no `dev` script. `vercel dev` runs `scripts.dev` when one is set, and a `dev` script of `vercel dev` aborts as a recursive invocation.
 

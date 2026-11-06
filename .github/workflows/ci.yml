@@ -40,5 +40,8 @@ jobs:
       - name: Typecheck
         run: pnpm run typecheck
 
+      - name: Check Vercel function builds
+        run: pnpm run check:vercel
+
       - name: Test
         run: pnpm test
