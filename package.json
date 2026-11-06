@@ -1,6 +1,6 @@
 {
   "name": "appfolio-grokbot-webhook-bridge",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "private": true,
   "description": "Thin HTTPS verify-and-forward for AppFolio webhooks → Grok Bot",
   "type": "module",
