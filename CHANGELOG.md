@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/compare/v0.5.1...v0.6.0) (2026-11-06)
+
+
+### Features
+
+* **webhooks:** measure latency and bound response cleanup ([#32](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/issues/32)) ([5b7a456](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/commit/5b7a456c2dc35d4d985839ff971223892bbf6e92))
+
 ## [0.5.1](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/compare/v0.5.0...v0.5.1) (2026-11-05)
 
 
