@@ -822,7 +822,7 @@ describe("createBridgeTelemetry", () => {
     },
   );
 
-  it("exports allowlisted diagnostics only on logs, preserving zero and false values", async () => {
+  it("exports perf-prefixed diagnostics only on logs, preserving zero and false values", async () => {
     const records: ReadableLogRecord[] = [];
     const capture = vi.fn();
     const telemetry = track(
@@ -892,26 +892,26 @@ describe("createBridgeTelemetry", () => {
     expect(records).toHaveLength(2);
     expect(records[0]?.attributes).toEqual({
       ...properties,
-      handler_elapsed_ms: 12.5,
-      telemetry_setup_duration_ms: 0,
-      runtime_id: "test-runtime",
-      runtime_request_number: 2,
-      vercel_id: "sfo1::iad1-test",
-      vercel_region: "iad1",
-      input_read_duration_ms: 0,
-      verification_duration_ms: 3,
-      jwks_lookup_duration_ms: 2,
-      jwks_cache_fresh_at_lookup_start: false,
-      jwks_reloading_at_lookup_start: false,
-      response_cleanup_duration_ms: 1,
-      response_cleanup_outcome: "drained",
+      perf_handler_elapsed_ms: 12.5,
+      perf_telemetry_setup_duration_ms: 0,
+      perf_runtime_id: "test-runtime",
+      perf_runtime_request_number: 2,
+      perf_vercel_id: "sfo1::iad1-test",
+      perf_vercel_region: "iad1",
+      perf_input_read_duration_ms: 0,
+      perf_verification_duration_ms: 3,
+      perf_jwks_lookup_duration_ms: 2,
+      perf_jwks_cache_fresh_at_lookup_start: false,
+      perf_jwks_reloading_at_lookup_start: false,
+      perf_response_cleanup_duration_ms: 1,
+      perf_response_cleanup_outcome: "drained",
     });
     expect(records[1]?.attributes).toEqual({
       ...properties,
-      handler_elapsed_ms: 13,
-      telemetry_setup_duration_ms: 0,
-      runtime_id: "test-runtime",
-      runtime_request_number: 3,
+      perf_handler_elapsed_ms: 13,
+      perf_telemetry_setup_duration_ms: 0,
+      perf_runtime_id: "test-runtime",
+      perf_runtime_request_number: 3,
     });
     for (const record of records) {
       expect(record.droppedAttributesCount).toBe(0);

@@ -386,40 +386,42 @@ function webhookHandledProperties(
   }
 }
 
-/** Keep diagnostics explicitly allowlisted and separate from analytics properties. */
+/** Keep diagnostics allowlisted, perf-prefixed, and separate from analytics. */
 function webhookDiagnosticProperties(
   diagnostics: WebhookDiagnostics | undefined,
 ): Record<string, string | number | boolean> {
   if (!diagnostics) return {};
   const properties: Record<string, string | number | boolean> = {
-    handler_elapsed_ms: diagnostics.handlerElapsedMs,
-    telemetry_setup_duration_ms: diagnostics.telemetrySetupDurationMs,
-    runtime_id: diagnostics.runtimeId,
-    runtime_request_number: diagnostics.runtimeRequestNumber,
+    perf_handler_elapsed_ms: diagnostics.handlerElapsedMs,
+    perf_telemetry_setup_duration_ms: diagnostics.telemetrySetupDurationMs,
+    perf_runtime_id: diagnostics.runtimeId,
+    perf_runtime_request_number: diagnostics.runtimeRequestNumber,
   };
   if (diagnostics.vercelId !== undefined) {
-    properties.vercel_id = diagnostics.vercelId;
+    properties.perf_vercel_id = diagnostics.vercelId;
   }
   if (diagnostics.vercelRegion !== undefined) {
-    properties.vercel_region = diagnostics.vercelRegion;
+    properties.perf_vercel_region = diagnostics.vercelRegion;
   }
   if (diagnostics.inputReadDurationMs !== undefined) {
-    properties.input_read_duration_ms = diagnostics.inputReadDurationMs;
+    properties.perf_input_read_duration_ms = diagnostics.inputReadDurationMs;
   }
   if (diagnostics.verificationDurationMs !== undefined) {
-    properties.verification_duration_ms = diagnostics.verificationDurationMs;
+    properties.perf_verification_duration_ms =
+      diagnostics.verificationDurationMs;
   }
   if (diagnostics.jwksLookup !== undefined) {
-    properties.jwks_lookup_duration_ms = diagnostics.jwksLookup.durationMs;
-    properties.jwks_cache_fresh_at_lookup_start =
+    properties.perf_jwks_lookup_duration_ms = diagnostics.jwksLookup.durationMs;
+    properties.perf_jwks_cache_fresh_at_lookup_start =
       diagnostics.jwksLookup.cacheFreshAtLookupStart;
-    properties.jwks_reloading_at_lookup_start =
+    properties.perf_jwks_reloading_at_lookup_start =
       diagnostics.jwksLookup.reloadingAtLookupStart;
   }
   if (diagnostics.responseCleanup !== undefined) {
-    properties.response_cleanup_duration_ms =
+    properties.perf_response_cleanup_duration_ms =
       diagnostics.responseCleanup.durationMs;
-    properties.response_cleanup_outcome = diagnostics.responseCleanup.outcome;
+    properties.perf_response_cleanup_outcome =
+      diagnostics.responseCleanup.outcome;
   }
   return properties;
 }
