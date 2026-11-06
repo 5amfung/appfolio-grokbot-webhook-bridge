@@ -19,6 +19,7 @@ import {
   type BridgeTelemetry,
   type BridgeTelemetryDeps,
   type LogExporterOptions,
+  type WebhookDiagnostics,
 } from "../src/posthog.js";
 import appfolioWebhook from "./fixtures/appfolio-work-order-webhook.json" with { type: "json" };
 
@@ -820,6 +821,106 @@ describe("createBridgeTelemetry", () => {
       });
     },
   );
+
+  it("exports allowlisted diagnostics only on logs, preserving zero and false values", async () => {
+    const records: ReadableLogRecord[] = [];
+    const capture = vi.fn();
+    const telemetry = track(
+      createBridgeTelemetry(
+        { POSTHOG_PROJECT_KEY: "phc_test_project" },
+        {
+          createAnalyticsClient: () => ({
+            capture,
+            flush: async () => undefined,
+            shutdown: async () => undefined,
+          }),
+          createLogExporter: () => ({
+            export(batch, callback) {
+              records.push(...batch);
+              callback({ code: ExportResultCode.SUCCESS });
+            },
+            shutdown: async () => undefined,
+            forceFlush: async () => undefined,
+          }),
+        },
+      ),
+    );
+    const diagnostics = {
+      handlerElapsedMs: 12.5,
+      telemetrySetupDurationMs: 0,
+      runtimeId: "test-runtime",
+      runtimeRequestNumber: 2,
+      vercelId: "sfo1::iad1-test",
+      vercelRegion: "iad1",
+      inputReadDurationMs: 0,
+      verificationDurationMs: 3,
+      jwksLookup: {
+        durationMs: 2,
+        cacheFreshAtLookupStart: false,
+        reloadingAtLookupStart: false,
+      },
+      responseCleanup: { durationMs: 1, outcome: "drained" },
+    } satisfies WebhookDiagnostics;
+    const outcome = {
+      kind: "forwarded",
+      reason: "forwarded",
+      durationMs: 12,
+      upstreamStatus: 200,
+      outboundDurationMs: 8,
+    } as const;
+    telemetry.captureWebhookHandled(outcome, undefined, {
+      ...diagnostics,
+      ...{ authorization: "Bearer crsr_do_not_export", duration_ms: 999 },
+    });
+    telemetry.captureWebhookHandled(outcome, undefined, {
+      handlerElapsedMs: 13,
+      telemetrySetupDurationMs: 0,
+      runtimeId: "test-runtime",
+      runtimeRequestNumber: 3,
+    });
+    await telemetry.flush();
+
+    const properties = {
+      kind: "forwarded",
+      reason: "forwarded",
+      duration_ms: 12,
+      upstream_status: 200,
+      outbound_duration_ms: 8,
+      environment: DEFAULT_DEPLOYMENT_ENVIRONMENT,
+      service_version: packageJson.version,
+    };
+    expect(records).toHaveLength(2);
+    expect(records[0]?.attributes).toEqual({
+      ...properties,
+      handler_elapsed_ms: 12.5,
+      telemetry_setup_duration_ms: 0,
+      runtime_id: "test-runtime",
+      runtime_request_number: 2,
+      vercel_id: "sfo1::iad1-test",
+      vercel_region: "iad1",
+      input_read_duration_ms: 0,
+      verification_duration_ms: 3,
+      jwks_lookup_duration_ms: 2,
+      jwks_cache_fresh_at_lookup_start: false,
+      jwks_reloading_at_lookup_start: false,
+      response_cleanup_duration_ms: 1,
+      response_cleanup_outcome: "drained",
+    });
+    expect(records[1]?.attributes).toEqual({
+      ...properties,
+      handler_elapsed_ms: 13,
+      telemetry_setup_duration_ms: 0,
+      runtime_id: "test-runtime",
+      runtime_request_number: 3,
+    });
+    for (const record of records) {
+      expect(record.droppedAttributesCount).toBe(0);
+    }
+    expect(capture).toHaveBeenCalledTimes(2);
+    for (const [event] of capture.mock.calls) {
+      expect(event.properties).toEqual(properties);
+    }
+  });
 
   it.each([
     ["raw UTF-8 bytes", JSON.stringify({ value: "\u20AC".repeat(22_000) }), 0],

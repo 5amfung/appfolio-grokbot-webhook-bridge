@@ -38,7 +38,10 @@ import {
 import { PostHog, type EventMessage, type PostHogOptions } from "posthog-node";
 import packageJson from "../package.json" with { type: "json" };
 import type { ConfigReason } from "./config.js";
-import type { UpstreamFetchFailure } from "./forward-to-grok-bot.js";
+import type {
+  ResponseCleanupMeasurement,
+  UpstreamFetchFailure,
+} from "./forward-to-grok-bot.js";
 import type { VerifyClassification } from "./verify-appfolio-jws.js";
 
 /** Fixed, non-personal distinct id. Do not replace this with a tenant or user id. */
@@ -70,6 +73,26 @@ const DETACHED_JWS_PATTERN = /\b[A-Za-z0-9_-]{8,}\.\.[A-Za-z0-9_-]{8,}\b/g;
 
 /** Where a handled failure was caught. Not an AppFolio payload field. */
 export type ExceptionSource = "config" | "webhook" | "upstream";
+
+export type JwksLookupDiagnostics = {
+  durationMs: number;
+  cacheFreshAtLookupStart: boolean;
+  reloadingAtLookupStart: boolean;
+};
+
+/** Request-local diagnostics for the outcome log only, never analytics. */
+export type WebhookDiagnostics = {
+  handlerElapsedMs: number;
+  telemetrySetupDurationMs: number;
+  runtimeId: string;
+  runtimeRequestNumber: number;
+  vercelId?: string;
+  vercelRegion?: string;
+  inputReadDurationMs?: number;
+  verificationDurationMs?: number;
+  jwksLookup?: JwksLookupDiagnostics;
+  responseCleanup?: ResponseCleanupMeasurement;
+};
 
 const WEBHOOK_HANDLED_EVENT = "webhook_handled";
 
@@ -128,9 +151,14 @@ export type BridgeTelemetry = {
   /**
    * Queue one `webhook_handled` analytics event and one log record.
    * Only the log includes JSON fields from rawBody as `payload.*` attributes.
+   * Optional stage diagnostics and runtime context are also log-only.
    * Never throws and does not flush.
    */
-  captureWebhookHandled(event: WebhookHandledEvent, rawBody?: Uint8Array): void;
+  captureWebhookHandled(
+    event: WebhookHandledEvent,
+    rawBody?: Uint8Array,
+    diagnostics?: WebhookDiagnostics,
+  ): void;
   /**
    * Send queued analytics events and log records. Never throws.
    * Register the returned promise with `waitUntil()` before the handler returns.
@@ -248,7 +276,7 @@ export function createBridgeTelemetry(
         // Telemetry must not change the HTTP status AppFolio sees.
       }
     },
-    captureWebhookHandled(event, rawBody) {
+    captureWebhookHandled(event, rawBody, diagnostics) {
       const properties = {
         ...webhookHandledProperties(event),
         environment,
@@ -258,7 +286,11 @@ export function createBridgeTelemetry(
         documentedLogs.getLogger(POSTHOG_SERVICE_NAME, PACKAGE_VERSION).emit({
           severityText: "info",
           body: WEBHOOK_HANDLED_EVENT,
-          attributes: { ...properties, ...payloadLogProperties(rawBody) },
+          attributes: {
+            ...properties,
+            ...webhookDiagnosticProperties(diagnostics),
+            ...payloadLogProperties(rawBody),
+          },
         });
       } catch {
         // A log export failure must not prevent analytics capture.
@@ -352,6 +384,44 @@ function webhookHandledProperties(
       return unexpected;
     }
   }
+}
+
+/** Keep diagnostics explicitly allowlisted and separate from analytics properties. */
+function webhookDiagnosticProperties(
+  diagnostics: WebhookDiagnostics | undefined,
+): Record<string, string | number | boolean> {
+  if (!diagnostics) return {};
+  const properties: Record<string, string | number | boolean> = {
+    handler_elapsed_ms: diagnostics.handlerElapsedMs,
+    telemetry_setup_duration_ms: diagnostics.telemetrySetupDurationMs,
+    runtime_id: diagnostics.runtimeId,
+    runtime_request_number: diagnostics.runtimeRequestNumber,
+  };
+  if (diagnostics.vercelId !== undefined) {
+    properties.vercel_id = diagnostics.vercelId;
+  }
+  if (diagnostics.vercelRegion !== undefined) {
+    properties.vercel_region = diagnostics.vercelRegion;
+  }
+  if (diagnostics.inputReadDurationMs !== undefined) {
+    properties.input_read_duration_ms = diagnostics.inputReadDurationMs;
+  }
+  if (diagnostics.verificationDurationMs !== undefined) {
+    properties.verification_duration_ms = diagnostics.verificationDurationMs;
+  }
+  if (diagnostics.jwksLookup !== undefined) {
+    properties.jwks_lookup_duration_ms = diagnostics.jwksLookup.durationMs;
+    properties.jwks_cache_fresh_at_lookup_start =
+      diagnostics.jwksLookup.cacheFreshAtLookupStart;
+    properties.jwks_reloading_at_lookup_start =
+      diagnostics.jwksLookup.reloadingAtLookupStart;
+  }
+  if (diagnostics.responseCleanup !== undefined) {
+    properties.response_cleanup_duration_ms =
+      diagnostics.responseCleanup.durationMs;
+    properties.response_cleanup_outcome = diagnostics.responseCleanup.outcome;
+  }
+  return properties;
 }
 
 /** Bound the logging copy only; verification and forwarding keep the original bytes. */
