@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.2](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/compare/v0.6.1...v0.6.2) (2026-11-06)
+
+
+### Bug Fixes
+
+* **posthog:** prefix diagnostic fields with perf ([#36](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/issues/36)) ([a430966](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/commit/a430966a3b7655bfe55d0d3c4ac26466c403313a))
+
 ## [0.6.1](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/compare/v0.6.0...v0.6.1) (2026-11-06)
 
 
