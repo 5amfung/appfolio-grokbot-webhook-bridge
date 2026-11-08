@@ -1,16 +1,23 @@
-import { createServer, type IncomingMessage } from "node:http";
+import type { IncomingMessage } from "node:http";
+import { createServer } from "node:https";
 import { Readable } from "node:stream";
 import { setTimeout as delay } from "node:timers/promises";
 import { gunzipSync } from "node:zlib";
 import { waitUntil } from "@vercel/functions";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { CompactSign, exportJWK, generateKeyPair } from "jose";
-import { expect, it, vi } from "vitest";
+import { afterAll, expect, it, vi } from "vitest";
 import { handleWebhookRequest } from "../api/webhooks/appfolio.js";
 import { createBridgeTelemetry, type BridgeTelemetry } from "../src/posthog.js";
 import appfolioWebhook from "./fixtures/appfolio-work-order-webhook.json" with { type: "json" };
+import {
+  localhostTls,
+  trustLocalhostCertificate,
+} from "./fixtures/localhost-tls.js";
 
 vi.mock("@vercel/functions", () => ({ waitUntil: vi.fn() }));
+
+afterAll(trustLocalhostCertificate());
 
 const DIAGNOSTIC_LOG_ATTRIBUTES = [
   "perf_handler_elapsed_ms",
@@ -28,7 +35,7 @@ const DIAGNOSTIC_LOG_ATTRIBUTES = [
   "perf_vercel_region",
 ];
 
-it("exports forwarded payloads and bounds unsigned request logs through real HTTP", async () => {
+it("exports forwarded payloads and bounds unsigned request logs through real HTTPS", async () => {
   const { rawBody, jwk, detached } =
     await signedSyntheticWebhook("logging-proof");
   const ingested: Array<{ path: string; body: string }> = [];
@@ -36,7 +43,7 @@ it("exports forwarded payloads and bounds unsigned request logs through real HTT
   let forwarded: Buffer | undefined;
   let authorization: string | undefined;
 
-  const server = createServer((req, res) => {
+  const server = createServer(localhostTls, (req, res) => {
     void (async () => {
       if (req.url === "/jwks") {
         await delay(60);
@@ -74,7 +81,7 @@ it("exports forwarded payloads and bounds unsigned request logs through real HTT
   if (address === null || typeof address === "string") {
     throw new Error("expected a TCP address");
   }
-  const origin = `http://127.0.0.1:${address.port}`;
+  const origin = `https://127.0.0.1:${address.port}`;
   const telemetry = createBridgeTelemetry({
     POSTHOG_PROJECT_KEY: "phc_synthetic_logging_proof",
     POSTHOG_HOST: origin,
@@ -492,7 +499,7 @@ async function withSyntheticBridge(
     released = true;
     gate.emit("release");
   };
-  const server = createServer((req, res) => {
+  const server = createServer(localhostTls, (req, res) => {
     void (async () => {
       if (req.url === "/jwks") {
         jwksFetches += 1;
@@ -546,7 +553,7 @@ async function withSyntheticBridge(
   const address = server.address();
   if (!address || typeof address === "string")
     throw new Error("expected a synthetic TCP endpoint");
-  const origin = `http://127.0.0.1:${address.port}`;
+  const origin = `https://127.0.0.1:${address.port}`;
   const telemetry: BridgeTelemetry = createBridgeTelemetry({
     POSTHOG_PROJECT_KEY: "phc_synthetic_measurements",
     POSTHOG_HOST: origin,

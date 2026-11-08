@@ -5,6 +5,7 @@ import { closeSync, existsSync, openSync, readFileSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { localhostCertificatePath } from "../../../../tests/fixtures/localhost-tls.ts";
 import {
   HEALTH_BODY,
   MISSING_SIGNATURE_BODY,
@@ -298,6 +299,7 @@ try {
     GROK_BOT_WEBHOOK_URL: started.upstreamUrl,
     GROK_BOT_BEARER_TOKEN: started.bearerToken,
     APPFOLIO_JWKS_URL: started.jwksUrl,
+    NODE_EXTRA_CA_CERTS: fileURLToPath(localhostCertificatePath),
   };
   delete childEnv.__VERCEL_DEV_RUNNING;
   const bridge = spawn(
