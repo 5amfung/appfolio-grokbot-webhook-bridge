@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/compare/v0.6.2...v0.7.0) (2026-11-08)
+
+
+### Features
+
+* **health:** check dependency reachability over HTTPS ([#38](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/issues/38)) ([44e6435](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/commit/44e643520b8e7e75ce79ffaf2592804812ed0e93))
+
 ## [0.6.2](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/compare/v0.6.1...v0.6.2) (2026-11-06)
 
 
