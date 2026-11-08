@@ -50,10 +50,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BridgeConfig {
     throw new Error(MISSING_BEARER_TOKEN);
   }
   return {
-    grokBotWebhookUrl: new URL(webhook),
+    grokBotWebhookUrl: parseHttpsUrl(webhook),
     grokBotBearerToken: token,
-    appfolioJwksUrl: new URL(
+    appfolioJwksUrl: parseHttpsUrl(
       env.APPFOLIO_JWKS_URL ?? DEFAULT_APPFOLIO_JWKS_URL,
     ),
   };
+}
+
+function parseHttpsUrl(value: string): URL {
+  const url = new URL(value);
+  if (url.protocol !== "https:") {
+    throw new TypeError("URL must use HTTPS");
+  }
+  return url;
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
-import { createServer } from "node:http";
+import { createServer } from "node:https";
 import {
   appendFileSync,
   mkdirSync,
@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { exportJWK, generateKeyPair } from "jose";
+import { localhostTls } from "../../../../tests/fixtures/localhost-tls.ts";
 import { VERIFY_KID, emitErr } from "./run-meta.mjs";
 
 const runDir = process.env.VERIFY_RUN_DIR;
@@ -68,7 +69,7 @@ function readRaw(req) {
   });
 }
 
-const jwksServer = createServer((_req, res) => {
+const jwksServer = createServer(localhostTls, (_req, res) => {
   const body = JSON.stringify({ keys: [publicJwk] });
   res.writeHead(200, {
     "content-type": "application/json",
@@ -77,8 +78,13 @@ const jwksServer = createServer((_req, res) => {
   res.end(body);
 });
 
-const upstreamServer = createServer(async (req, res) => {
+const upstreamServer = createServer(localhostTls, async (req, res) => {
   try {
+    if (req.method === "HEAD") {
+      res.writeHead(405, { Allow: "POST" });
+      res.end();
+      return;
+    }
     if (req.method !== "POST") {
       res.writeHead(404);
       res.end();
@@ -122,8 +128,8 @@ const jwksPort = await listen(jwksServer);
 const upstreamPort = await listen(upstreamServer);
 const state = {
   pid: process.pid,
-  jwksUrl: `http://127.0.0.1:${jwksPort}/jwks.json`,
-  upstreamUrl: `http://127.0.0.1:${upstreamPort}/inbound`,
+  jwksUrl: `https://127.0.0.1:${jwksPort}/jwks.json`,
+  upstreamUrl: `https://127.0.0.1:${upstreamPort}/inbound`,
   privateJwkPath,
   capturesPath,
   upstreamStatusPath,

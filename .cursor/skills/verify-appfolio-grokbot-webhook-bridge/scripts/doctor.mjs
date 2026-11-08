@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
+import { trustLocalhostCertificate } from "../../../../tests/fixtures/localhost-tls.ts";
 import {
   HEALTH_BODY,
   MISSING_SIGNATURE_BODY,
@@ -15,6 +16,8 @@ import {
 } from "./run-meta.mjs";
 
 const PRIVATE_JWK_FIELDS = ["d", "p", "q", "dp", "dq", "qi"];
+
+trustLocalhostCertificate();
 
 try {
   const args = parseArgs(process.argv.slice(2));
