@@ -85,16 +85,21 @@ describe("GET /api/health", () => {
     );
   });
 
-  it("accepts a Grok Bot 405 response for a POST-only webhook", async () => {
-    fetchMock.mockImplementation(
-      async (_url, init) =>
-        new Response(null, { status: init?.method === "HEAD" ? 405 : 200 }),
-    );
-    const { res, state } = mockRes();
-    await handler(req, res);
-    expect(state.statusCode).toBe(200);
-    expect(state.body).toEqual({ ok: true });
-  });
+  it.each([404, 405])(
+    "accepts a Grok Bot %s response as reachability evidence",
+    async (status) => {
+      fetchMock.mockImplementation(
+        async (_url, init) =>
+          new Response(null, {
+            status: init?.method === "HEAD" ? status : 200,
+          }),
+      );
+      const { res, state } = mockRes();
+      await handler(req, res);
+      expect(state.statusCode).toBe(200);
+      expect(state.body).toEqual({ ok: true });
+    },
+  );
 
   it("returns 200 when the PostHog key is unset", async () => {
     vi.stubEnv("POSTHOG_PROJECT_KEY", "");
@@ -113,7 +118,6 @@ describe("GET /api/health", () => {
     ["grok_bot", 302],
     ["grok_bot", 401],
     ["grok_bot", 403],
-    ["grok_bot", 404],
     ["grok_bot", 429],
     ["grok_bot", 500],
   ])("returns 503 when %s responds with %s", async (dependency, status) => {

@@ -13,13 +13,13 @@ Deploy target: Vercel. Production updates only when a release merges. See [Relea
 | `GET`  | `/api/health`            | `200 { ok: true }` when config and dependency probes pass. `500` for invalid config; `503` for an unavailable dependency. |
 | `POST` | `/api/webhooks/appfolio` | Verify AppFolio JWS, forward raw body to Grok Bot                                                                         |
 
-Health probes run concurrently with a five-second deadline per URL. AppFolio JWKS uses `GET` and requires HTTP `200`. Grok Bot uses authenticated `HEAD` and accepts `2xx` or `405` for a POST-only webhook. The probes do not send webhook payloads, follow redirects, or wait for response bodies. Health responses use `Cache-Control: no-store`.
+Health probes run concurrently with a five-second deadline per URL. AppFolio JWKS uses `GET` and requires HTTP `200`. Grok Bot uses authenticated `HEAD` and accepts `2xx`, `404`, or `405` as reachability evidence. The probes do not send webhook payloads, follow redirects, or wait for response bodies. Health responses use `Cache-Control: no-store`.
 
 Both `GROK_BOT_WEBHOOK_URL` and `APPFOLIO_JWKS_URL` require HTTPS. HTTP URLs, including loopback addresses, return `config_invalid_url` before any network request.
 
 A dependency failure returns `{ ok: false, reason: "dependency_unavailable", checks }`. Each `checks.appfolio_jwks` and `checks.grok_bot` result contains `ok` and an HTTP `status` when available. Failed checks include `reason: "http_error"`, `"timeout"`, or `"network_error"`. Responses exclude configured URLs, credentials, upstream bodies, and error messages. Config failures retain `500 { ok: false, reason }` with the existing config tokens.
 
-The Grok Bot probe establishes reachability. A successful probe does not verify POST acceptance or bot processing, and a `405` does not verify the bearer token. The JWKS probe checks HTTP availability without validating the key set.
+The Grok Bot probe establishes reachability. A successful probe does not verify POST acceptance or bot processing. A `404` or `405` response does not validate the webhook URL or bearer token. The JWKS probe checks HTTP availability without validating the key set.
 
 ## Environment (Vercel only — never commit secrets)
 

@@ -77,7 +77,8 @@ it("probes real HTTPS endpoints concurrently without sending a webhook or waitin
         response.write('{"keys":[');
         // Deliberately leave the body open; health needs only HTTP headers.
       } else {
-        response.writeHead(405, { Allow: "POST" });
+        // A POST-only webhook can return 404 for HEAD.
+        response.writeHead(404);
         response.end();
       }
     }
@@ -85,7 +86,7 @@ it("probes real HTTPS endpoints concurrently without sending a webhook or waitin
 
   expect(await checkDependencies(config)).toEqual({
     appfolio_jwks: { ok: true, status: 200 },
-    grok_bot: { ok: true, status: 405 },
+    grok_bot: { ok: true, status: 404 },
   });
   expect(requests).toEqual(
     expect.arrayContaining([
