@@ -44,9 +44,12 @@ async function probeUrl(
       cache: "no-store",
     });
     const { status } = response;
-    // A POST-only webhook can reject HEAD while still being reachable.
+    // POST-only webhooks can return 404 or 405 to HEAD while still reachable.
+    // These responses establish HTTP reachability, not webhook readiness.
     const ok =
-      init.method === "HEAD" ? response.ok || status === 405 : status === 200;
+      init.method === "HEAD"
+        ? response.ok || status === 404 || status === 405
+        : status === 200;
     return ok
       ? { ok: true, status }
       : { ok: false, reason: "http_error", status };
