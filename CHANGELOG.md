@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/compare/v0.7.0...v0.7.1) (2026-11-09)
+
+
+### Bug Fixes
+
+* **health:** accept Grok HEAD 404 as reachability ([#40](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/issues/40)) ([e075d70](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/commit/e075d7060927ee48c65bfbe292f783cea7dee4d9))
+
 ## [0.7.0](https://github.com/5amfung/appfolio-grokbot-webhook-bridge/compare/v0.6.2...v0.7.0) (2026-11-08)
 
 
